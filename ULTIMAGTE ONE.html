@@ -1,0 +1,3001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DoriyaNet Marine Engine | Hilsa Habitat Predictor</title>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-dark: #0a0d12;
+      --panel-bg: rgba(14, 18, 25, 0.90);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --accent-cyan: #00e5ff;
+      --accent-green: #00e676;
+      --accent-amber: #ffb300;
+      --accent-red: #ff2a5f;
+      --font-main: 'Plus Jakarta Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: var(--font-main);
+      color: #f0f4f8;
+    }
+
+    #map {
+      width: 100vw;
+      height: 100vh;
+      background: #0d1117;
+      z-index: 1;
+    }
+
+    /* Glassmorphism Panel Base */
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+    }
+
+    /* Clean Mitered Polygon Edges inside housesPane */
+    .leaflet-houses-pane path {
+      stroke-linejoin: miter !important;
+      stroke-linecap: square !important;
+      stroke-miterlimit: 12 !important;
+      transition: fill-opacity 0.2s ease, stroke-width 0.2s ease, stroke 0.2s ease;
+    }
+
+    /* Ship Marker & Radar Lock Pulse */
+    .ship-marker-wrapper {
+      background: transparent !important;
+      border: none !important;
+      cursor: pointer;
+    }
+
+    @keyframes shipRadarRing {
+      0% { transform: scale(0.75); opacity: 0.95; }
+      100% { transform: scale(1.65); opacity: 0; }
+    }
+    .ship-lock-ring {
+      transform-origin: center;
+      animation: shipRadarRing 1.6s infinite ease-out;
+    }
+
+    /* Animated Species Migration Streamlines & Decadal Shift Nodes */
+    @keyframes migrationStreamFlow {
+      to { stroke-dashoffset: -36; }
+    }
+    .migration-flow-stream {
+      animation: migrationStreamFlow 1.35s linear infinite;
+    }
+    .migration-year-badge {
+      background: transparent !important;
+      border: none !important;
+    }
+
+    /* Dark Glass Leaflet Popup for Hilsa Zones */
+    .doriya-house-popup .leaflet-popup-content-wrapper {
+      background: rgba(11, 15, 23, 0.95);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      color: #f1f5f9;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.8);
+      padding: 0;
+    }
+    .doriya-house-popup .leaflet-popup-content {
+      margin: 12px 14px;
+      width: 272px !important;
+      font-family: var(--font-main);
+    }
+    .doriya-house-popup .leaflet-popup-tip {
+      background: rgba(11, 15, 23, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    .doriya-house-popup a.leaflet-popup-close-button {
+      color: #94a3b8;
+      top: 8px;
+      right: 9px;
+      font-size: 16px;
+    }
+    .doriya-house-popup a.leaflet-popup-close-button:hover {
+      color: #ffffff;
+    }
+
+    /* Pulse Indicator */
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 12px var(--accent-green);
+      animation: pulse-glow 1.8s infinite;
+    }
+
+    @keyframes pulse-glow {
+      0% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.2); }
+      100% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    /* Custom Input Range */
+    input[type=range] {
+      accent-color: var(--accent-cyan);
+    }
+
+    /* Swatch of No Ground MPA Zoned Polygon & Alarm Animations */
+    @keyframes swatchBorderPulse {
+      0%, 100% { stroke-opacity: 1; fill-opacity: 0.28; }
+      50% { stroke-opacity: 0.72; fill-opacity: 0.44; }
+    }
+    .swatch-mpa-zone {
+      animation: swatchBorderPulse 2.2s infinite ease-in-out;
+      filter: drop-shadow(0 0 8px rgba(255, 42, 120, 0.85));
+    }
+    .swatch-mpa-label {
+      background: transparent !important;
+      border: none !important;
+      pointer-events: none;
+    }
+
+    @keyframes alarmShakeGlow {
+      0%, 100% { box-shadow: 0 0 24px rgba(244, 63, 94, 0.55); }
+      50% { box-shadow: 0 0 42px rgba(244, 63, 94, 0.95); }
+    }
+    .sanctuary-alarm-active {
+      animation: alarmShakeGlow 1.4s infinite ease-in-out;
+    }
+
+    /* Movable HUD Panels */
+    .hud-draggable {
+      touch-action: none;
+    }
+    .hud-draggable.is-dragging {
+      opacity: 0.94;
+      z-index: 1850 !important;
+      box-shadow: 0 24px 54px rgba(0, 229, 255, 0.28);
+    }
+    .hud-drag-handle {
+      cursor: grab;
+    }
+    .hud-drag-handle:active {
+      cursor: grabbing;
+    }
+
+    /* Custom Scrollbar for Modals & Inspector */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="antialiased">
+
+  <div id="map"></div>
+
+  <!-- ALWAYS-VISIBLE FLOATING MAP CONTROLS & HUD SWITCH -->
+  <div class="absolute top-5 right-5 z-[1500] flex flex-wrap items-center justify-end gap-2">
+    <!-- Live AIS Ship Tracker Drawer Toggle Button -->
+    <button id="btn-live-ships" onclick="toggleShipsPanel()" class="glass-panel px-3.5 py-2 rounded-xl flex items-center space-x-2 text-xs font-mono border border-emerald-500/45 hover:border-emerald-400 bg-gray-950/90 text-emerald-300 hover:text-white transition-all shadow-lg cursor-pointer">
+      <i class="fa-solid fa-ship text-sm text-emerald-400"></i>
+      <span class="font-bold tracking-wide">LIVE SHIPS</span>
+    </button>
+    <!-- Data-Driven Hilsa Probability Zones Inspector Toggle Button -->
+    <button id="btn-hotspot-houses" onclick="toggleHousesInspector()" class="glass-panel px-3.5 py-2 rounded-xl flex items-center space-x-2 text-xs font-mono border border-rose-500/40 hover:border-rose-400 bg-gray-950/90 text-rose-300 hover:text-white transition-all shadow-lg cursor-pointer">
+      <i class="fa-solid fa-layer-group text-sm text-rose-400"></i>
+      <span class="font-bold tracking-wide">HILSA ZONES</span>
+    </button>
+    <!-- Map Voyage Planner Toggle Button -->
+    <button id="btn-voyage-planner" onclick="toggleVoyagePlanner()" class="glass-panel px-3.5 py-2 rounded-xl flex items-center space-x-2 text-xs font-mono border border-amber-500/40 hover:border-amber-400 bg-gray-950/90 text-amber-400 hover:text-white transition-all shadow-lg cursor-pointer">
+      <i class="fa-solid fa-route text-sm text-amber-400"></i>
+      <span class="font-bold tracking-wide">VOYAGE PLANNER</span>
+    </button>
+    <!-- Individual Boxes Manager & Restore Dropdown Toggle -->
+    <div class="relative">
+      <button id="btn-boxes-manager" onclick="toggleBoxesManagerPopover()" class="glass-panel px-3.5 py-2 rounded-xl flex items-center space-x-2 text-xs font-mono border border-indigo-500/45 hover:border-indigo-400 bg-gray-950/90 text-indigo-300 hover:text-white transition-all shadow-lg cursor-pointer">
+        <i class="fa-solid fa-table-cells-large text-sm text-indigo-400"></i>
+        <span id="boxes-manager-label" class="font-bold tracking-wide">BOXES (3/3)</span>
+      </button>
+      <!-- Popover to restore removed boxes or reset moved positions -->
+      <div id="boxes-manager-popover" class="hidden absolute right-0 mt-2 w-64 glass-panel p-3 rounded-xl border border-indigo-500/40 shadow-2xl z-[1750] font-mono text-xs space-y-2">
+        <div class="flex items-center justify-between pb-1.5 border-b border-gray-800">
+          <span class="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">Interface Boxes</span>
+          <button onclick="resetAllHudBoxes()" class="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/35 text-indigo-200 border border-indigo-500/50 px-2 py-0.5 rounded font-bold cursor-pointer">
+            Reset All
+          </button>
+        </div>
+        <label class="flex items-center justify-between p-1.5 rounded bg-gray-900/80 hover:bg-gray-800 cursor-pointer">
+          <span class="text-gray-200 text-[11px]">Top Status &amp; Tools Bar</span>
+          <input type="checkbox" id="chk-box-hud-box-status" checked onchange="setHudBoxVisible('hud-box-status', this.checked)" class="rounded bg-gray-950 border-gray-700 text-cyan-500">
+        </label>
+        <label class="flex items-center justify-between p-1.5 rounded bg-gray-900/80 hover:bg-gray-800 cursor-pointer">
+          <span class="text-gray-200 text-[11px]">Layer Control Panel</span>
+          <input type="checkbox" id="chk-box-hud-box-layers" checked onchange="setHudBoxVisible('hud-box-layers', this.checked)" class="rounded bg-gray-950 border-gray-700 text-cyan-500">
+        </label>
+        <label class="flex items-center justify-between p-1.5 rounded bg-gray-900/80 hover:bg-gray-800 cursor-pointer">
+          <span class="text-gray-200 text-[11px]">HSI Spectrum Legend</span>
+          <input type="checkbox" id="chk-box-hud-box-legend" checked onchange="setHudBoxVisible('hud-box-legend', this.checked)" class="rounded bg-gray-950 border-gray-700 text-cyan-500">
+        </label>
+        <div class="text-[9px] text-gray-400 pt-1 border-t border-gray-800/80">
+          <i class="fa-solid fa-lock text-cyan-400 mr-1"></i> Lower-left HSI Math box stays anchored.
+        </div>
+      </div>
+    </div>
+    <!-- Clean Map / HUD Toggle Switch -->
+    <button id="btn-hud-switch" onclick="toggleHudVisibility()" class="glass-panel px-4 py-2 rounded-xl flex items-center space-x-2.5 text-xs font-mono border border-cyan-500/40 hover:border-cyan-400 bg-gray-950/90 text-cyan-400 hover:text-white transition-all shadow-lg cursor-pointer">
+      <i id="hud-switch-icon" class="fa-solid fa-eye-slash text-sm text-cyan-400"></i>
+      <span id="hud-switch-label" class="font-bold tracking-wide">HIDE PANELS</span>
+    </button>
+  </div>
+
+  <!-- LIVE SWATCH OF NO GROUND SANCTUARY GEOFENCE ALARM BANNER -->
+  <div id="sanctuary-global-alarm" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[1700] w-[540px] max-w-[94vw] bg-rose-950/95 backdrop-blur-xl border-2 border-rose-500 rounded-2xl p-3.5 shadow-2xl sanctuary-alarm-active font-mono text-xs">
+    <div class="flex items-start justify-between gap-3">
+      <div class="flex items-start space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-rose-500/25 border border-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+          <i class="fa-solid fa-bell text-rose-300 text-base animate-bounce"></i>
+        </div>
+        <div class="space-y-1">
+          <div class="flex items-center space-x-2">
+            <span class="bg-rose-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded uppercase tracking-widest">SANCTUARY ALARM • MPA BREACH</span>
+            <span id="alarm-coords-badge" class="text-[10px] text-rose-200 font-bold">21.12°N, 89.42°E</span>
+          </div>
+          <div id="alarm-title-text" class="font-extrabold text-white text-xs">
+            SWATCH OF NO GROUND MARINE PROTECTED AREA ALERT
+          </div>
+          <p id="alarm-detail-text" class="text-[11px] text-rose-200 leading-snug">
+            Restricted deep-canyon cetacean &amp; Hilsa breeding reserve. Commercial trawling and gillnet deployment strictly prohibited.
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-col items-end space-y-1.5 shrink-0">
+        <button onclick="dismissSanctuaryAlarm()" class="px-2.5 py-1 rounded-lg bg-rose-800/80 hover:bg-rose-700 text-white border border-rose-400/60 text-[10px] font-bold cursor-pointer">
+          Acknowledge
+        </button>
+        <button id="btn-alarm-mute" onclick="toggleSanctuaryAlarmAudio()" class="px-2 py-0.5 rounded bg-gray-950/80 hover:bg-gray-900 text-rose-200 border border-rose-700/70 text-[9px] cursor-pointer">
+          <i id="alarm-audio-icon" class="fa-solid fa-volume-high mr-1"></i><span id="alarm-audio-label">Tone ON</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING REAL-TIME AIS SHIP TRACKER DRAWER (Movable) -->
+  <div id="ships-tracker-panel" class="hud-draggable absolute top-16 right-5 z-[1600] w-[440px] max-w-[92vw] max-h-[78vh] flex flex-col glass-panel p-3.5 rounded-2xl border border-emerald-500/45 shadow-2xl transition-shadow duration-200 hidden font-mono text-xs">
+    <div data-drag-handle="ships-tracker-panel" class="hud-drag-handle flex items-center justify-between pb-2 border-b border-gray-800 shrink-0">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-grip-vertical text-gray-500 text-xs"></i>
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-bold text-emerald-300 uppercase tracking-wider text-[11px]">Bay of Bengal Live AIS Vessel Tracker</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="btn-unlock-ship-drawer" onclick="unlockTrackedShip()" class="hidden text-[9px] bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600/80 px-2 py-0.5 rounded font-bold cursor-pointer">
+          RELEASE SHIP
+        </button>
+        <button onclick="toggleShipsPanel()" title="Close Drawer" class="text-gray-400 hover:text-white cursor-pointer px-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+
+    <!-- Tracking Speed & Live AIS Feed Connector -->
+    <div class="grid grid-cols-2 gap-2 my-2 shrink-0 text-[10px]">
+      <div class="bg-gray-950 p-2 rounded-lg border border-gray-800">
+        <div class="text-[9px] text-gray-400 uppercase font-bold">Telemetry Motion Rate</div>
+        <select id="ship-speed-multiplier" onchange="setShipSpeedMultiplier(this.value)" class="w-full bg-transparent text-emerald-300 font-bold outline-none cursor-pointer mt-0.5">
+          <option value="1" class="bg-gray-950 text-gray-200">1x Real-Time Knots (AIS)</option>
+          <option value="15" selected class="bg-gray-950 text-gray-200">15x Live Zone Crossing</option>
+          <option value="45" class="bg-gray-950 text-gray-200">45x Fast Patrol Preview</option>
+        </select>
+      </div>
+      <div class="bg-gray-950 p-2 rounded-lg border border-gray-800">
+        <div class="text-[9px] text-gray-400 uppercase font-bold">AIS Stream Source</div>
+        <div id="ais-source-badge" class="text-cyan-300 font-bold truncate mt-0.5">Bay of Bengal AIS Live Feed</div>
+      </div>
+    </div>
+
+    <!-- Optional Real-World AIS JSON Proxy URL Input -->
+    <div class="flex items-center gap-1.5 mb-2 shrink-0">
+      <input id="inp-ais-endpoint" type="text" placeholder="Optional: Live AIS JSON Proxy URL (e.g. AISStream relay)" class="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-2.5 py-1.5 text-[10px] text-gray-200 outline-none focus:border-emerald-400" />
+      <button onclick="connectCustomAisFeed()" class="px-2.5 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 text-[10px] font-bold shrink-0 cursor-pointer">
+        Sync AIS
+      </button>
+    </div>
+
+    <div class="text-[10px] text-gray-400 mb-2 shrink-0">
+      Click any ship on the map or press <strong class="text-emerald-300">Lock &amp; Track</strong> below—as the ship moves across regions, the HSI &amp; ocean bars update live.
+    </div>
+
+    <!-- Scrollable Active Vessels List -->
+    <div id="ships-tracker-list" class="overflow-y-auto pr-1 space-y-2 flex-1"></div>
+  </div>
+
+  <!-- FLOATING DATA-DRIVEN HILSA PROBABILITY ZONES INSPECTOR DRAWER (Movable) -->
+  <div id="houses-inspector-panel" class="hud-draggable absolute top-16 right-5 z-[1600] w-[440px] max-w-[92vw] max-h-[78vh] flex flex-col glass-panel p-3.5 rounded-2xl border border-rose-500/40 shadow-2xl transition-shadow duration-200 hidden font-mono text-xs">
+    <div data-drag-handle="houses-inspector-panel" class="hud-drag-handle flex items-center justify-between pb-2 border-b border-gray-800 shrink-0">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-grip-vertical text-gray-500 text-xs"></i>
+        <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+        <span class="font-bold text-rose-300 uppercase tracking-wider text-[11px]">Multi-Domain Hilsa Zones (0.40–0.99)</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span id="houses-ultra-count" class="text-[9px] bg-rose-950 text-rose-200 border border-rose-700/80 px-2 py-0.5 rounded font-bold">0 POCKETS</span>
+        <button onclick="toggleHousesInspector()" title="Close Drawer" class="text-gray-400 hover:text-white cursor-pointer px-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+
+    <!-- HSI Master Domain Filter & Bar Point Cutoff -->
+    <div class="flex flex-wrap items-center justify-between gap-1.5 my-2 shrink-0 text-[10px]">
+      <div class="flex items-center gap-1">
+        <button id="filter-houses-all" onclick="setHousesFilter('all')" class="px-2 py-1 rounded bg-rose-500/25 text-rose-200 border border-rose-500/60 font-bold cursor-pointer">ALL</button>
+        <button id="filter-houses-red" onclick="setHousesFilter('red')" class="px-2 py-1 rounded bg-gray-900 text-rose-300 border border-gray-800 hover:text-white cursor-pointer">RED</button>
+        <button id="filter-houses-yellow" onclick="setHousesFilter('yellow')" class="px-2 py-1 rounded bg-gray-900 text-amber-300 border border-gray-800 hover:text-white cursor-pointer">YELLOW</button>
+        <button id="filter-houses-green" onclick="setHousesFilter('green')" class="px-2 py-1 rounded bg-gray-900 text-emerald-300 border border-gray-800 hover:text-white cursor-pointer">GREEN</button>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="text-[9px] text-gray-400">BAR:</span>
+        <select id="hsi-bar-cutoff-select" onchange="setHsiBarCutoff(this.value)" class="bg-gray-950 text-rose-300 border border-rose-700/70 rounded px-1.5 py-0.5 text-[10px] font-bold outline-none cursor-pointer">
+          <option value="0.40" selected>≥ 0.40 (Red+Yel+Grn)</option>
+          <option value="0.60">≥ 0.60 (Red+Yellow)</option>
+          <option value="0.80">≥ 0.80 (Red Core Only)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Scrollable Extracted Zones List -->
+    <div id="houses-inspector-list" class="overflow-y-auto pr-1 space-y-2.5 flex-1"></div>
+  </div>
+
+  <!-- FLOATING MINIMAL VOYAGE PLANNER PANEL (Movable) -->
+  <div id="voyage-panel" class="hud-draggable absolute top-16 right-5 z-[1600] w-[460px] max-w-[92vw] glass-panel p-3.5 rounded-2xl border border-amber-500/40 shadow-2xl transition-shadow duration-200 hidden font-mono text-xs">
+    <div data-drag-handle="voyage-panel" class="hud-drag-handle flex items-center justify-between pb-2 border-b border-gray-800">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-grip-vertical text-gray-500 text-xs"></i>
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span class="font-bold text-amber-400 uppercase tracking-wider text-[11px]">Dynamic Shore-to-Sea Route Planner</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button onclick="clearVoyageRoute()" class="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-0.5 rounded border border-gray-700 cursor-pointer">Clear Route</button>
+        <button onclick="toggleVoyagePlanner()" title="Close Drawer" class="text-gray-400 hover:text-white cursor-pointer px-1"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 my-2 text-[11px]">
+      <div class="bg-gray-950 p-2 rounded-lg border border-gray-800">
+        <div class="text-[9px] text-gray-400 uppercase font-bold">1. Shore Origin Dock</div>
+        <select id="shore-port-select" onchange="updateFuelCalc()" class="w-full bg-transparent text-amber-300 font-bold outline-none cursor-pointer mt-0.5">
+          <option value="bhola" class="bg-gray-950 text-gray-200">Bhola Dock (Central Delta)</option>
+          <option value="chandpur" class="bg-gray-950 text-gray-200">Chandpur (North Estuary)</option>
+          <option value="patharghata" class="bg-gray-950 text-gray-200">Patharghata (Barguna)</option>
+          <option value="mongla" class="bg-gray-950 text-gray-200">Mongla (Sundarbans West)</option>
+          <option value="chattogram" class="bg-gray-950 text-gray-200">Chattogram Fishery Ghat</option>
+          <option value="coxsbazar" class="bg-gray-950 text-gray-200">Cox's Bazar Dock</option>
+        </select>
+      </div>
+      <div class="bg-gray-950 p-2 rounded-lg border border-gray-800">
+        <div class="text-[9px] text-gray-400 uppercase font-bold">2. Ocean Target</div>
+        <div id="target-loc-text" class="text-cyan-400 font-bold truncate mt-0.5">Tap any ocean point on map</div>
+      </div>
+    </div>
+
+    <!-- DYNAMIC SANCTUARY WARNING ALERT BANNER -->
+    <div id="sanctuary-alert-banner" class="hidden my-2 p-2 rounded-xl bg-red-950/90 border border-red-500/80 text-red-300 text-[10px] flex items-start space-x-2.5 animate-pulse shadow-lg">
+      <i class="fa-solid fa-triangle-exclamation text-sm text-red-400 mt-0.5"></i>
+      <div>
+        <span class="font-extrabold block uppercase text-red-400 tracking-wider text-[9px]">⚠️ PROTECTED MARINE SANCTUARY ALERT</span>
+        <span id="sanctuary-alert-msg" class="text-gray-200 text-[10px] leading-tight">Target coordinate lies inside a restricted sanctuary zone.</span>
+      </div>
+    </div>
+
+    <!-- Live Calculations Metrics Row -->
+    <div class="grid grid-cols-4 gap-1.5 text-center my-2">
+      <div class="bg-gray-950 p-1.5 rounded-lg border border-gray-800">
+        <div class="text-[8px] text-gray-400">DISTANCE</div>
+        <div id="calc-dist" class="text-xs font-bold text-cyan-300 mt-0.5">0 km</div>
+      </div>
+      <div class="bg-gray-950 p-1.5 rounded-lg border border-gray-800">
+        <div class="text-[8px] text-gray-400">DIESEL SAVED</div>
+        <div id="calc-diesel" class="text-xs font-bold text-amber-400 mt-0.5">0.0 L</div>
+      </div>
+      <div class="bg-gray-950 p-1.5 rounded-lg border border-gray-800">
+        <div class="text-[8px] text-gray-400">COST SAVED</div>
+        <div id="calc-cost" class="text-xs font-bold text-emerald-400 mt-0.5">৳ 0</div>
+      </div>
+      <div class="bg-gray-950 p-1.5 rounded-lg border border-gray-800">
+        <div class="text-[8px] text-gray-400">CO₂ CUT</div>
+        <div id="calc-co2" class="text-xs font-bold text-cyan-400 mt-0.5">0 kg</div>
+      </div>
+    </div>
+
+    <div class="text-[10px] text-gray-400 flex items-center justify-between border-t border-gray-800/80 pt-1.5">
+      <span><i class="fa-solid fa-hand-pointer text-amber-400 mr-1"></i> Tap shore dot = Origin | Tap ocean/Zone = Target</span>
+      <select id="vessel-select" onchange="updateFuelCalc()" class="bg-gray-900 text-gray-300 text-[10px] rounded px-1.5 py-0.5 border border-gray-700 outline-none">
+        <option value="small">16 HP Trawler</option>
+        <option value="medium" selected>45 HP Trawler</option>
+        <option value="large">90 HP Vessel</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- COMPACT ALWAYS-PRESENT HSI FLOATING BADGE (Shows Locked Ship Pill when tracking a vessel) -->
+  <div id="always-hsi-badge" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1400] glass-panel px-5 py-2.5 rounded-full flex items-center space-x-3 text-xs font-mono border border-cyan-500/50 shadow-2xl transition-all duration-300">
+    <div class="pulse-dot"></div>
+    <div id="locked-ship-pill" class="hidden items-center space-x-1.5 bg-emerald-950/95 border border-emerald-500/70 text-emerald-300 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+      <i class="fa-solid fa-ship text-[10px]"></i>
+      <span id="locked-ship-pill-name">FV Meghna Pioneer</span>
+      <button onclick="unlockTrackedShip()" title="Release Ship Lock" class="ml-1 text-rose-300 hover:text-white cursor-pointer">✕</button>
+    </div>
+    <div class="flex items-center space-x-2">
+      <span class="text-gray-400">LIVE HSI:</span>
+      <span id="always-val-hsi" class="text-cyan-400 font-extrabold text-sm">0.92</span>
+      <span id="always-hsi-status" class="bg-emerald-950 text-emerald-400 border border-emerald-700/80 text-[10px] font-bold px-2 py-0.5 rounded-full">OPTIMAL HILSA</span>
+    </div>
+    <div class="h-3 w-px bg-gray-700"></div>
+    <div class="text-gray-300 text-[11px] font-medium space-x-2">
+      <span>SST: <strong id="always-val-sst" class="text-amber-400">28.5°C</strong></span>
+      <span>CHL: <strong id="always-val-chl" class="text-emerald-400">2.61mg/m³</strong></span>
+      <span>SSS: <strong id="always-val-sss" class="text-cyan-400">18.7PSU</strong></span>
+    </div>
+  </div>
+
+  <!-- FULL HUD INTERFACE CONTAINER -->
+  <div id="hud-container" class="transition-all duration-300">
+
+    <!-- Top Center Status Bar (Movable & Individually Removable) -->
+    <div id="hud-box-status" class="hud-draggable absolute top-5 left-1/2 -translate-x-1/2 z-[1000]">
+      <div class="glass-panel px-4 py-2 rounded-full flex items-center space-x-2.5 text-xs font-mono">
+        <button data-drag-handle="hud-box-status" title="Move Status Bar" class="hud-drag-handle text-gray-400 hover:text-cyan-300 px-1">
+          <i class="fa-solid fa-grip-vertical"></i>
+        </button>
+        <div class="pulse-dot"></div>
+        <span id="status-text" class="text-gray-200 font-medium">LIVE TELEMETRY + AIS VESSEL STREAM ACTIVE</span>
+        <button onclick="openKeyModal()" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer">
+          <i class="fa-solid fa-key mr-1"></i> NASA API Keys
+        </button>
+        <button onclick="openStatsModal()" class="bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/40 px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer">
+          <i class="fa-solid fa-chart-line mr-1"></i> Stat Detective
+        </button>
+        <button onclick="openRawModal()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer">
+          <i class="fa-solid fa-code mr-1"></i> Raw Telemetry
+        </button>
+        <button onclick="setHudBoxVisible('hud-box-status', false)" title="Remove Status Bar" class="w-6 h-6 rounded-full bg-gray-900 hover:bg-rose-950 text-gray-400 hover:text-rose-300 border border-gray-700 flex items-center justify-center text-[10px] cursor-pointer">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Top Right Layer Control Panel (Movable & Individually Removable) -->
+    <div id="hud-box-layers" class="hud-draggable absolute top-16 right-5 z-[1000] w-80">
+      <div class="glass-panel p-4 rounded-xl text-xs space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-gray-800">
+          <div class="flex items-center space-x-2">
+            <button data-drag-handle="hud-box-layers" title="Move Layer Control" class="hud-drag-handle text-gray-400 hover:text-cyan-300">
+              <i class="fa-solid fa-up-down-left-right text-[11px]"></i>
+            </button>
+            <span class="font-bold text-gray-400 font-mono tracking-wider uppercase text-[11px]">Layer Control</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span class="text-[10px] text-cyan-400 font-mono font-semibold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800">ACTIVE</span>
+            <button onclick="setHudBoxVisible('hud-box-layers', false)" title="Remove Layer Control" class="w-6 h-6 rounded-md bg-gray-900 hover:bg-rose-950 text-gray-400 hover:text-rose-300 border border-gray-700 flex items-center justify-center text-[10px] cursor-pointer">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <!-- Swatch of No Ground MPA Zone & Alarm Toggle -->
+          <div class="flex items-center justify-between p-2 rounded-lg bg-rose-950/35 hover:bg-rose-950/55 border border-rose-700/60 transition-all">
+            <label class="flex items-center space-x-2 cursor-pointer flex-1">
+              <input type="checkbox" id="chk-sanctuary" checked onchange="toggleSanctuaryLayer(this.checked)" class="rounded bg-gray-950 border-gray-700 text-rose-500 focus:ring-0">
+              <span class="font-semibold text-rose-200 text-[11px]">🛡️ Swatch MPA Zone &amp; Alarm</span>
+            </label>
+            <button onclick="simulateSwatchBreach()" title="Trigger Swatch Geofence Alarm Test" class="text-[9px] bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/70 font-mono font-bold px-1.5 py-0.5 rounded cursor-pointer">
+              TEST ALARM
+            </button>
+          </div>
+
+          <!-- HSI Toggle -->
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800/80 cursor-pointer border border-gray-800 transition-all">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="chk-hsi" checked onchange="toggleHsi(this.checked)" class="rounded bg-gray-950 border-gray-700 text-cyan-500 focus:ring-0">
+              <span class="font-semibold text-gray-200 text-[11px]">Habitat Suitability Index (HSI)</span>
+            </div>
+            <span class="text-[9px] bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono font-bold px-1.5 py-0.5 rounded">FLUID</span>
+          </label>
+
+          <!-- Isolines Toggle -->
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800/80 cursor-pointer border border-gray-800 transition-all">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="chk-isolines" checked onchange="toggleIsolines(this.checked)" class="rounded bg-gray-950 border-gray-700 text-amber-500 focus:ring-0">
+              <span class="font-semibold text-gray-200 text-[11px]">🎣 Fisherman Isolines &amp; Targets</span>
+            </div>
+            <span class="text-[9px] bg-white/20 text-white border border-white/60 font-mono font-bold px-1.5 py-0.5 rounded">CONTOUR</span>
+          </label>
+
+          <!-- Sub-Surface Bathymetric Depth Layer Toggle -->
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800/80 cursor-pointer border border-gray-800 transition-all">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="chk-subsurface" onchange="toggleSubSurfaceView(this.checked)" class="rounded bg-gray-950 border-gray-700 text-teal-400 focus:ring-0">
+              <span class="font-semibold text-teal-300 text-[11px]">🌊 Sub-Surface Ocean Mapping</span>
+            </div>
+            <span class="text-[9px] bg-teal-950 text-teal-300 border border-teal-700 font-mono font-bold px-1.5 py-0.5 rounded">RARE</span>
+          </label>
+
+          <!-- Data-Driven Hilsa Probability Isobands Overlay Toggle -->
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800/80 cursor-pointer border border-rose-900/60 transition-all">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="chk-houses" checked onchange="toggleHotspotHouses(this.checked)" class="rounded bg-gray-950 border-gray-700 text-rose-500 focus:ring-0">
+              <span class="font-semibold text-rose-300 text-[11px]">🎯 Multi-Domain Hilsa Zones (R/Y/G)</span>
+            </div>
+            <span class="text-[9px] bg-rose-950 text-rose-300 border border-rose-700 font-mono font-bold px-1.5 py-0.5 rounded">12-TIER</span>
+          </label>
+
+          <!-- Live AIS Ships Overlay Toggle -->
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800/80 cursor-pointer border border-emerald-900/60 transition-all">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="chk-ships" checked onchange="toggleShipsVisibility(this.checked)" class="rounded bg-gray-950 border-gray-700 text-emerald-500 focus:ring-0">
+              <span class="font-semibold text-emerald-300 text-[11px]">🚢 Live Bay of Bengal Ships (AIS)</span>
+            </div>
+            <span class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-700 font-mono font-bold px-1.5 py-0.5 rounded">LIVE</span>
+          </label>
+
+          <!-- Multi-Species Seaward Migration & Multi-Year Shift Flow Toggle (All 10 Species) -->
+          <label class="flex items-center justify-between p-2 rounded-lg bg-gray-900/80 hover:bg-gray-800/80 cursor-pointer border border-cyan-900/60 transition-all">
+            <div class="flex items-center space-x-2">
+              <input type="checkbox" id="chk-migration" onchange="toggleMigrationFlow(this.checked)" class="rounded bg-gray-950 border-gray-700 text-cyan-400 focus:ring-0">
+              <span class="font-semibold text-cyan-300 text-[11px]">🐟 Seaward Migration &amp; Year Shift</span>
+            </div>
+            <span id="migration-mode-badge" class="text-[9px] bg-cyan-950 text-cyan-300 border border-cyan-700 font-mono font-bold px-1.5 py-0.5 rounded">SEAWARD</span>
+          </label>
+        </div>
+
+        <!-- Target Species Selector (Original 3 untouched + 7 added Bay of Bengal species) -->
+        <div class="pt-2 border-t border-gray-800">
+          <label class="block font-mono text-[10px] text-gray-400 mb-1.5 uppercase tracking-wider">Multi-Species Ecosystem Target</label>
+          <select id="species-select" onchange="changeSpeciesTarget(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-md p-2 text-xs text-indigo-300 outline-none focus:border-indigo-500 font-mono">
+            <option value="hilsa">Tenualosa ilisha (Hilsa Shad - Flagship)</option>
+            <option value="pelagic">Commercial Pelagic Stocks (Sardinella &amp; Tuna)</option>
+            <option value="birds">Migratory Coastal Birds (Delta Wetland Feeders)</option>
+            <option value="bagda">Penaeus monodon (Giant Tiger Shrimp / Bagda)</option>
+            <option value="tuna">Thunnus albacares (Yellowfin &amp; Skipjack Tuna)</option>
+            <option value="pomfret">Pampus argenteus (Silver Pomfret / Rupchanda)</option>
+            <option value="bombayduck">Harpadon nehereus (Bombay Duck / Loitta)</option>
+            <option value="lobster">Panulirus polyphagus (Spiny Lobster)</option>
+            <option value="seabass">Lates calcarifer (Asian Sea Bass / Koral)</option>
+            <option value="sawfish">Pristis pristis (Largetooth Sawfish - Endangered)</option>
+          </select>
+          <div id="species-conservation-alert" class="hidden mt-2 p-2 rounded-lg bg-red-950/90 border border-red-500/80 text-red-200 font-mono text-[10px] leading-snug">
+            <span class="font-extrabold text-red-400 block uppercase">⚠️ CRITICALLY ENDANGERED SPECIES</span>
+            Pristis pristis is strictly protected. Map shows critical habitat for conservation monitoring only — no harvesting permitted.
+          </div>
+        </div>
+
+        <!-- Basemap Selector -->
+        <div class="pt-2 border-t border-gray-800">
+          <label class="block font-mono text-[10px] text-gray-400 mb-1.5 uppercase tracking-wider">Basemap Engine</label>
+          <select id="basemap-select" onchange="changeBasemap(this.value)" class="w-full bg-gray-950 border border-gray-800 rounded-md p-2 text-xs text-gray-200 outline-none focus:border-cyan-500 font-mono">
+            <option value="esri-dark">Esri Dark Ocean Canvas (Ash Black)</option>
+            <option value="carto-dark">CartoDB Dark Matter (Keyless)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Left Telemetry & HSI Math Panel (ANCHORED & PERMANENT — NEVER REMOVED OR MOVED) -->
+    <div id="hud-box-hsi-anchored" class="absolute bottom-6 left-5 z-[1000] w-96">
+      <div class="glass-panel p-4 rounded-xl space-y-3.5 text-xs">
+        <div class="flex items-center justify-between pb-2 border-b border-gray-800">
+          <span class="font-bold text-gray-400 font-mono tracking-wider uppercase text-[11px]">Ocean Telemetry &amp; HSI Math</span>
+          <span id="hsi-badge" class="bg-emerald-950/90 text-emerald-400 border border-emerald-700/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]">
+            OPTIMAL HILSA
+          </span>
+        </div>
+
+        <!-- Feature Description -->
+        <div id="feature-title" class="bg-gray-900/60 border-l-2 border-cyan-400 p-2 rounded-r text-[11px] text-gray-300 font-medium">
+          Ganges-Meghna Estuarine Plume (Low Salinity / High Nutrients)
+        </div>
+
+        <!-- HSI Bar -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-[11px] font-mono">
+            <span class="text-gray-400">Habitat Suitability Index (HSI)</span>
+            <span id="val-hsi" class="text-cyan-400 font-bold">0.92 / 1.00</span>
+          </div>
+          <div class="w-full bg-gray-950 h-1.5 rounded-full overflow-hidden border border-gray-800">
+            <div id="bar-hsi" class="h-full bg-cyan-400 rounded-full transition-all duration-300" style="width: 92%;"></div>
+          </div>
+        </div>
+
+        <!-- SST Bar -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-[11px] font-mono">
+            <span class="text-gray-400">Sea Surface Temp (SST)</span>
+            <span id="val-sst" class="text-amber-400 font-bold">28.5 °C</span>
+          </div>
+          <div class="w-full bg-gray-950 h-1.5 rounded-full overflow-hidden border border-gray-800">
+            <div id="bar-sst" class="h-full bg-amber-400 rounded-full transition-all duration-300" style="width: 82%;"></div>
+          </div>
+        </div>
+
+        <!-- CHL Bar -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-[11px] font-mono">
+            <span class="text-gray-400">Chlorophyll-a (CHL)</span>
+            <span id="val-chl" class="text-emerald-400 font-bold">2.61 mg/m³</span>
+          </div>
+          <div class="w-full bg-gray-950 h-1.5 rounded-full overflow-hidden border border-gray-800">
+            <div id="bar-chl" class="h-full bg-emerald-400 rounded-full transition-all duration-300" style="width: 76%;"></div>
+          </div>
+        </div>
+
+        <!-- SSS Bar -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-[11px] font-mono">
+            <span class="text-gray-400">Sea Surface Salinity (SSS)</span>
+            <span id="val-sss" class="text-cyan-400 font-bold">18.7 PSU</span>
+          </div>
+          <div class="w-full bg-gray-950 h-1.5 rounded-full overflow-hidden border border-gray-800">
+            <div id="bar-sss" class="h-full bg-cyan-400 rounded-full transition-all duration-300" style="width: 45%;"></div>
+          </div>
+        </div>
+
+        <!-- Formula Math Card -->
+        <div class="bg-gray-950/80 border border-dashed border-gray-800 p-2.5 rounded-lg font-mono text-[10px] text-gray-400 space-y-1">
+          <div class="text-cyan-400 font-bold">FORMULA: HSI = (S_sst × S_chl × S_sss)^(1/3)</div>
+          <div>S_SST (Gaussian <span id="math-opt-sst">T=28.0°C</span>): <span id="math-sst" class="text-gray-200">0.99</span></div>
+          <div>S_CHL (LogNorm <span id="math-opt-chl">Max=3.8mg/m³</span>): <span id="math-chl" class="text-gray-200">0.79</span></div>
+          <div>S_SSS (Gaussian <span id="math-opt-sss">S=18.0PSU</span>): <span id="math-sss" class="text-gray-200">0.99</span></div>
+        </div>
+
+        <!-- Timeline Controls -->
+        <div class="pt-2 border-t border-gray-800 space-y-2">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-gray-400 font-mono uppercase text-[10px] tracking-wider">Spatial Forecast Timeline</span>
+            <div class="flex space-x-1 font-mono text-[10px]">
+              <button id="btn-mode-48h" onclick="setTimelineMode('48h')" class="bg-cyan-500 text-gray-950 font-bold px-2 py-0.5 rounded border border-cyan-400 cursor-pointer">⚡ 48h</button>
+              <button id="btn-mode-20y" onclick="setTimelineMode('20y')" class="bg-gray-800 text-gray-400 font-bold px-2 py-0.5 rounded border border-gray-700 cursor-pointer">📅 2014-2034</button>
+            </div>
+          </div>
+          <div class="flex items-center space-x-3">
+            <button id="btn-play-pause" onclick="toggleTimelinePlay()" class="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 w-8 h-8 rounded-lg flex items-center justify-center font-bold cursor-pointer">
+              <i id="play-icon" class="fa-solid fa-play text-xs"></i>
+            </button>
+            <input type="range" id="time-slider" min="0" max="48" step="1" value="0" oninput="onTimelineChange(this.value)" class="flex-1 cursor-pointer">
+            <span id="time-readout" class="font-mono text-cyan-400 font-bold text-[11px] w-20 text-right">0h (NOW)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Right Legend Panel (Movable & Individually Removable) -->
+    <div id="hud-box-legend" class="hud-draggable absolute bottom-6 right-5 z-[1000] w-80">
+      <div class="glass-panel p-4 rounded-xl space-y-2.5 text-xs">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-1.5">
+            <button data-drag-handle="hud-box-legend" title="Move Legend Panel" class="hud-drag-handle text-gray-400 hover:text-cyan-300">
+              <i class="fa-solid fa-up-down-left-right text-[10px]"></i>
+            </button>
+            <span class="font-bold text-gray-400 font-mono tracking-wider uppercase text-[10px]">HABITAT SUITABILITY INDEX (HSI)</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span class="text-[9px] font-mono text-cyan-400 font-bold">4-DOMAIN</span>
+            <button onclick="setHudBoxVisible('hud-box-legend', false)" title="Remove Legend Panel" class="w-5 h-5 rounded bg-gray-900 hover:bg-rose-950 text-gray-400 hover:text-rose-300 border border-gray-700 flex items-center justify-center text-[9px] cursor-pointer">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Continuous Full-Spectrum Color Bar -->
+        <div class="w-full h-3.5 rounded-md overflow-hidden bg-gradient-to-r from-[#041238] via-[#0d3a94] via-[#1d86e8] via-[#38bdf8] via-[#0d9488] via-[#22c55e] via-[#eab308] via-[#f43f5e] to-[#7f0019] border border-gray-700"></div>
+        <div class="flex justify-between font-mono text-[8px] text-gray-400">
+          <span>0.00</span>
+          <span>0.20</span>
+          <span>0.40</span>
+          <span>0.50</span>
+          <span>0.60</span>
+          <span>0.70</span>
+          <span>0.80</span>
+          <span>0.99</span>
+        </div>
+
+        <!-- 4 Master Domains Key -->
+        <div class="border-t border-gray-800 pt-2 space-y-1.5 text-[8.5px] font-mono">
+          <div class="flex items-center justify-between">
+            <span class="text-gray-300 uppercase font-bold">Detailed Sub-Zones (0.40–0.99)</span>
+            <span id="legend-bar-cutoff" class="text-[8px] text-rose-300 font-bold">BAR ≥ 0.40</span>
+          </div>
+
+          <!-- Master Red (0.80 - 0.99) -->
+          <div class="flex items-center justify-between bg-gray-950/70 px-2 py-1 rounded border border-rose-900/50">
+            <div class="flex items-center space-x-1">
+              <span class="w-2.5 h-2.5 bg-[#7f0019] border border-[#ffccd5]"></span>
+              <span class="w-2.5 h-2.5 bg-[#be123c] border border-[#fda4af]"></span>
+              <span class="w-2.5 h-2.5 bg-[#e11d48] border border-[#fecdd3]"></span>
+              <span class="w-2.5 h-2.5 bg-[#f43f5e] border border-[#ffe4e6]"></span>
+              <span class="text-rose-200 font-bold ml-1">RED CORE</span>
+            </div>
+            <span class="text-rose-300 font-bold">0.80–0.99</span>
+          </div>
+
+          <!-- Master Yellow (0.60 - 0.80) -->
+          <div class="flex items-center justify-between bg-gray-950/70 px-2 py-1 rounded border border-amber-900/50">
+            <div class="flex items-center space-x-1">
+              <span class="w-2.5 h-2.5 bg-[#d97706] border border-[#fde68a]"></span>
+              <span class="w-2.5 h-2.5 bg-[#eab308] border border-[#fef08a]"></span>
+              <span class="w-2.5 h-2.5 bg-[#facc15] border border-[#fef9c3]"></span>
+              <span class="w-2.5 h-2.5 bg-[#fde047] border border-[#fefce8]"></span>
+              <span class="text-amber-200 font-bold ml-1">YELLOW SHELF</span>
+            </div>
+            <span class="text-amber-300 font-bold">0.60–0.80</span>
+          </div>
+
+          <!-- Master Green (0.40 - 0.60) -->
+          <div class="flex items-center justify-between bg-gray-950/70 px-2 py-1 rounded border border-emerald-900/50">
+            <div class="flex items-center space-x-1">
+              <span class="w-2.5 h-2.5 bg-[#65a30d] border border-[#d9f99d]"></span>
+              <span class="w-2.5 h-2.5 bg-[#16a34a] border border-[#bbf7d0]"></span>
+              <span class="w-2.5 h-2.5 bg-[#059669] border border-[#a7f3d0]"></span>
+              <span class="w-2.5 h-2.5 bg-[#0d9488] border border-[#99f6e4]"></span>
+              <span class="text-emerald-200 font-bold ml-1">GREEN CORRIDOR</span>
+            </div>
+            <span class="text-emerald-300 font-bold">0.40–0.60</span>
+          </div>
+
+          <!-- Master Blue (0.00 - 0.40 Fluid Ocean) -->
+          <div class="flex items-center justify-between bg-gray-950/70 px-2 py-1 rounded border border-sky-900/50">
+            <div class="flex items-center space-x-1">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#38bdf8]"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-[#1d86e8]"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-[#155ec4]"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-[#082260]"></span>
+              <span class="text-sky-300 font-bold ml-1">FLUID BLUE OCEAN</span>
+            </div>
+            <span class="text-sky-400 font-bold">0.00–0.40</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NASA Key Modal -->
+  <div id="api-modal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[2000] hidden items-center justify-center p-4">
+    <div class="glass-panel max-w-md w-full p-6 rounded-2xl border border-gray-800 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+        <h3 class="text-base font-bold text-white flex items-center">
+          <i class="fa-solid fa-key text-cyan-400 mr-2"></i> NASA &amp; NOAA API Credentials
+        </h3>
+        <button onclick="closeKeyModal()" class="text-gray-400 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <p class="text-xs text-gray-400 leading-relaxed">
+        Ingest live MODIS-Aqua, VIIRS, and NOAA ERDDAP datasets directly into the oceanographic engine.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-[10px] font-mono text-cyan-400 mb-1 uppercase">NASA OPEN API KEY (api.nasa.gov)</label>
+          <input type="text" id="key-nasa" placeholder="DEMO_KEY or 40-character key" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white outline-none focus:border-cyan-500 font-mono">
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-cyan-400 mb-1 uppercase">NOAA / EARTHDATA BEARER TOKEN</label>
+          <input type="text" id="key-earthdata" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white outline-none focus:border-cyan-500 font-mono">
+        </div>
+      </div>
+      <div class="flex justify-end space-x-2 pt-2 border-t border-gray-800">
+        <button onclick="closeKeyModal()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer">Use Public Stream</button>
+        <button onclick="saveKeys()" class="bg-cyan-500 hover:bg-cyan-400 text-gray-950 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer">Save &amp; Sync</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw API Inspection Modal -->
+  <div id="raw-modal" class="fixed inset-0 bg-black/75 backdrop-blur-md z-[2000] hidden items-center justify-center p-4">
+    <div class="glass-panel max-w-2xl w-full p-6 rounded-2xl border border-gray-800 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+        <h3 class="text-base font-bold text-white font-mono flex items-center">
+          <i class="fa-solid fa-terminal text-cyan-400 mr-2"></i> Live NASA/NOAA &amp; AIS Vessel Telemetry Stream
+        </h3>
+        <button onclick="closeRawModal()" class="text-gray-400 hover:text-white cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <pre id="raw-json" class="bg-gray-950 border border-gray-800 rounded-lg p-4 font-mono text-[11px] text-cyan-400 overflow-x-auto max-h-80"></pre>
+      <div class="flex justify-end pt-2 border-t border-gray-800">
+        <button onclick="closeRawModal()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer">Close Inspector</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATISTICAL DETECTIVE & MANN-KENDALL TEST MODAL -->
+  <div id="stats-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[2000] hidden items-center justify-center p-4">
+    <div class="glass-panel max-w-2xl w-full p-6 rounded-2xl border border-indigo-500/40 shadow-2xl space-y-4 font-mono">
+      <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+        <div>
+          <span class="text-[9px] bg-indigo-950 text-indigo-400 border border-indigo-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">NASA EARTH SYSTEM DATA DETECTIVE ENGINE</span>
+          <h3 class="text-base font-bold text-white flex items-center mt-1">
+            <i class="fa-solid fa-chart-line text-indigo-400 mr-2"></i> Mann-Kendall Trend &amp; Significance Analysis
+          </h3>
+        </div>
+        <button onclick="closeStatsModal()" class="text-gray-400 hover:text-white text-lg cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- Variable & Region Selectors -->
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[10px] text-gray-400 uppercase font-bold mb-1">Target Variable</label>
+          <select id="stats-var-select" onchange="runMannKendallTest()" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-indigo-300 outline-none focus:border-indigo-500">
+            <option value="sst" selected>Sea Surface Temperature (SST - °C)</option>
+            <option value="sss">Sea Surface Salinity (SSS - PSU)</option>
+            <option value="chl">Chlorophyll-a Productivity (CHL - mg/m³)</option>
+            <option value="hsi">Composite Habitat Suitability Index (HSI)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] text-gray-400 uppercase font-bold mb-1">Observation Zone</label>
+          <select id="stats-zone-select" onchange="runMannKendallTest()" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-xs text-indigo-300 outline-none focus:border-indigo-500">
+            <option value="estuary" selected>Meghna River Estuary (Northern Delta)</option>
+            <option value="swatch">Swatch of No Ground (Deep Marine Trench)</option>
+            <option value="odisha">Odisha Coastal Plume Boundary</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Test Output Metrics Grid -->
+      <div class="grid grid-cols-4 gap-2 bg-gray-950 p-3 rounded-xl border border-gray-800 text-center">
+        <div class="bg-gray-900/60 p-2 rounded-lg border border-gray-800">
+          <div class="text-[9px] text-gray-400 uppercase font-bold">MK Score (S)</div>
+          <div id="stat-mk-s" class="text-sm font-extrabold text-indigo-400 mt-1">+194.0</div>
+        </div>
+        <div class="bg-gray-900/60 p-2 rounded-lg border border-gray-800">
+          <div class="text-[9px] text-gray-400 uppercase font-bold">Z-Score</div>
+          <div id="stat-mk-z" class="text-sm font-extrabold text-cyan-400 mt-1">+3.82</div>
+        </div>
+        <div class="bg-gray-900/60 p-2 rounded-lg border border-gray-800">
+          <div class="text-[9px] text-gray-400 uppercase font-bold">p-value</div>
+          <div id="stat-mk-p" class="text-sm font-extrabold text-emerald-400 mt-1">&lt; 0.0001</div>
+        </div>
+        <div class="bg-gray-900/60 p-2 rounded-lg border border-gray-800">
+          <div class="text-[9px] text-gray-400 uppercase font-bold">Sen's Slope (m)</div>
+          <div id="stat-mk-slope" class="text-sm font-extrabold text-amber-400 mt-1">+0.084/yr</div>
+        </div>
+      </div>
+
+      <!-- Hypothesis Verdict Card -->
+      <div id="stat-verdict-card" class="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-600/60 text-xs space-y-1">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-emerald-400 uppercase text-[10px]">Hypothesis Testing Result</span>
+          <span id="stat-verdict-badge" class="bg-emerald-900 text-emerald-200 text-[9px] font-bold px-2 py-0.5 rounded-full border border-emerald-700">REJECT H0 (SIGNIFICANT)</span>
+        </div>
+        <p id="stat-verdict-desc" class="text-gray-300 text-[11px] leading-relaxed">
+          Statistically significant positive trend detected over 2014–2034 (p &lt; 0.0001). Ocean warming exceeds natural variance thresholds.
+        </p>
+      </div>
+
+      <!-- Time Series Sparkline Preview -->
+      <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1.5">
+        <div class="flex justify-between text-[10px] text-gray-400">
+          <span>Decadal Time Series (2014 ──► 2034)</span>
+          <span id="stat-ci-bounds" class="text-indigo-400 font-bold">95% CI: [+0.071, +0.097]</span>
+        </div>
+        <div id="stat-sparkline" class="h-12 flex items-end justify-between gap-1 pt-1 border-b border-gray-800"></div>
+      </div>
+
+      <div class="flex justify-end pt-1 border-t border-gray-800">
+        <button onclick="closeStatsModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-5 py-2 rounded-lg transition-all cursor-pointer">Done Inspecting</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------
+    // LEAFLET MAP & BASEMAP ENGINE INITIALIZATION
+    // -------------------------------------------------------------
+    const map = L.map('map', {
+      center: [19.8, 90.0],
+      zoom: 6,
+      minZoom: 5,
+      maxZoom: 10,
+      zoomControl: false
+    });
+
+    const basemaps = {
+      'esri-dark': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri',
+        maxZoom: 16
+      }),
+      'carto-dark': L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      })
+    };
+
+    basemaps['esri-dark'].addTo(map);
+
+    // Custom Leaflet Pane for Edgy Data-Driven R/Y/G Hilsa Zones (z-index: 540)
+    map.createPane('housesPane');
+    map.getPane('housesPane').style.zIndex = 540;
+    map.getPane('housesPane').classList.add('leaflet-houses-pane');
+
+    // Custom Leaflet Pane for Multi-Species Migration Streamlines & 20y Shift Paths (z-index: 585)
+    map.createPane('migrationPane');
+    map.getPane('migrationPane').style.zIndex = 585;
+
+    // Custom Leaflet Pane for Live AIS Ships & Wake Trails (z-index: 620)
+    map.createPane('shipsPane');
+    map.getPane('shipsPane').style.zIndex = 620;
+
+    // Custom Leaflet Pane for Swatch of No Ground MPA Sanctuary & Geofence Alarm (z-index: 615)
+    map.createPane('sanctuaryPane');
+    map.getPane('sanctuaryPane').style.zIndex = 615;
+
+    // Custom Top-Level Pane for Voyage Route Line, Target Dot & Shore Origin Docks (z-index: 640)
+    map.createPane('voyagePane');
+    map.getPane('voyagePane').style.zIndex = 640;
+
+    // Dedicated Overlay Pane for Labels (z-index: 650)
+    map.createPane('labelsPane');
+    map.getPane('labelsPane').style.zIndex = 650;
+    map.getPane('labelsPane').style.pointerEvents = 'none';
+
+    const esriLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      pane: 'labelsPane'
+    }).addTo(map);
+
+    // -------------------------------------------------------------
+    // STATE & GLOBAL CONTROL VARIABLES
+    // -------------------------------------------------------------
+    let isHsiVisible = true;
+    let isIsolinesVisible = true;
+    let isSubSurfaceView = false;
+    let isHotspotHousesVisible = true;
+    let isShipsVisible = true;
+    let isMigrationFlowVisible = false;
+    let isSanctuaryVisible = true;
+    let isSanctuaryAlarmAudioEnabled = true;
+    let lastAlarmCooldownKey = '';
+    let currentActiveAlarmKey = '';
+    const acknowledgedAlarmKeys = new Set();
+    let isHudVisible = true;
+    let isVoyagePlannerActive = false;
+    let isHousesInspectorActive = false;
+    let isShipsPanelActive = false;
+    let currentHousesFilter = 'all';
+    let hsiBarCutoff = 0.40;
+    let currentTimelineMode = '48h';
+    let currentStep = 0;
+    let isPlaying = false;
+    let playTimer = null;
+    let currentSpecies = 'hilsa';
+    let currentMousePos = null;
+    let clickedCustomTarget = null;
+    let routeCasingPolyline = null;
+    let routePolyline = null;
+    let oceanMarker = null;
+    let shorePortMarkers = [];
+    let extractedDataDrivenPockets = [];
+    let lockedShipId = null;
+    let shipSpeedMultiplier = 15;
+    let shipAnimTimer = null;
+    const shipMarkersMap = {};
+    const shipWakesMap = {};
+
+    const migrationFlowLayerGroup = L.layerGroup().addTo(map);
+    const hotspotHousesLayerGroup = L.layerGroup().addTo(map);
+    const sanctuaryLayerGroup = L.layerGroup().addTo(map);
+    const shipsLayerGroup = L.layerGroup().addTo(map);
+    const isolinesLayerGroup = L.layerGroup().addTo(map);
+
+    // -------------------------------------------------------------
+    // MOVABLE & INDIVIDUALLY REMOVABLE HUD BOXES MANAGER
+    // -------------------------------------------------------------
+    const managedHudBoxIds = [
+      'hud-box-status',
+      'hud-box-layers',
+      'hud-box-legend'
+    ];
+
+    function toggleBoxesManagerPopover() {
+      const pop = document.getElementById('boxes-manager-popover');
+      if (pop) pop.classList.toggle('hidden');
+    }
+
+    function updateBoxesManagerCount() {
+      let visibleCount = 0;
+      managedHudBoxIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.classList.contains('hidden')) {
+          visibleCount++;
+        }
+      });
+      const label = document.getElementById('boxes-manager-label');
+      if (label) label.textContent = `BOXES (${visibleCount}/${managedHudBoxIds.length})`;
+    }
+
+    function setHudBoxVisible(boxId, visible) {
+      const el = document.getElementById(boxId);
+      const chk = document.getElementById(`chk-box-${boxId}`);
+      if (el) {
+        if (visible) {
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      }
+      if (chk) chk.checked = Boolean(visible);
+      updateBoxesManagerCount();
+    }
+
+    function resetAllHudBoxes() {
+      managedHudBoxIds.forEach(id => setHudBoxVisible(id, true));
+      document.querySelectorAll('.hud-draggable').forEach(el => {
+        el.style.left = '';
+        el.style.top = '';
+        el.style.right = '';
+        el.style.bottom = '';
+        el.style.transform = '';
+      });
+      const pop = document.getElementById('boxes-manager-popover');
+      if (pop) pop.classList.add('hidden');
+    }
+
+    function initDraggableBoxes() {
+      document.querySelectorAll('[data-drag-handle]').forEach(handle => {
+        const targetId = handle.getAttribute('data-drag-handle');
+        const targetEl = document.getElementById(targetId);
+        if (!targetEl) return;
+
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let origLeft = 0;
+        let origTop = 0;
+
+        const onPointerDown = (e) => {
+          if (e.target && e.target.closest('button') && e.target.closest('button') !== handle) return;
+          isDragging = true;
+          const rect = targetEl.getBoundingClientRect();
+          startX = e.clientX;
+          startY = e.clientY;
+          origLeft = rect.left;
+          origTop = rect.top;
+
+          targetEl.style.left = `${origLeft}px`;
+          targetEl.style.top = `${origTop}px`;
+          targetEl.style.right = 'auto';
+          targetEl.style.bottom = 'auto';
+          targetEl.style.transform = 'none';
+          targetEl.classList.add('is-dragging');
+
+          if (handle.setPointerCapture && e.pointerId !== undefined) {
+            try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+          e.stopPropagation();
+        };
+
+        const onPointerMove = (e) => {
+          if (!isDragging) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const maxLeft = Math.max(8, window.innerWidth - targetEl.offsetWidth - 8);
+          const maxTop = Math.max(8, window.innerHeight - targetEl.offsetHeight - 8);
+          const nextLeft = Math.min(maxLeft, Math.max(8, origLeft + dx));
+          const nextTop = Math.min(maxTop, Math.max(8, origTop + dy));
+          targetEl.style.left = `${nextLeft}px`;
+          targetEl.style.top = `${nextTop}px`;
+        };
+
+        const onPointerUp = () => {
+          if (!isDragging) return;
+          isDragging = false;
+          targetEl.classList.remove('is-dragging');
+        };
+
+        handle.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+      });
+    }
+
+    // -------------------------------------------------------------
+    // SWATCH OF NO GROUND MPA GEOFENCE & SANCTUARY ALARM ENGINE
+    // -------------------------------------------------------------
+    const swatchMpaPolygon = [
+      [21.24, 89.22],
+      [21.30, 89.56],
+      [21.06, 89.68],
+      [20.84, 89.52],
+      [20.88, 89.20],
+      [21.10, 89.14]
+    ];
+
+    function isPointInSwatchMpa(lat, lng) {
+      let inside = false;
+      for (let i = 0, j = swatchMpaPolygon.length - 1; i < swatchMpaPolygon.length; j = i++) {
+        const xi = swatchMpaPolygon[i][1];
+        const yi = swatchMpaPolygon[i][0];
+        const xj = swatchMpaPolygon[j][1];
+        const yj = swatchMpaPolygon[j][0];
+        const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function doesSegmentIntersectSwatchMpa(lat1, lng1, lat2, lng2) {
+      const steps = 40;
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const lat = lat1 + (lat2 - lat1) * t;
+        const lng = lng1 + (lng2 - lng1) * t;
+        if (isPointInSwatchMpa(lat, lng)) {
+          return { lat, lng };
+        }
+      }
+      return null;
+    }
+
+    function playSanctuaryAlarmTone() {
+      if (!isSanctuaryAlarmAudioEnabled) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        [660, 880].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.16);
+          gain.gain.setValueAtTime(0.06, now + idx * 0.16);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.16 + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.16);
+          osc.stop(now + idx * 0.16 + 0.15);
+        });
+      } catch (_) {
+        // Ignore audio block if user hasn't interacted yet
+      }
+    }
+
+    function triggerSanctuaryAlarm(title, detail, lat, lng, cooldownKey) {
+      // Do not re-open an alert that the user has already acknowledged
+      if (cooldownKey && acknowledgedAlarmKeys.has(cooldownKey)) return;
+
+      // Suppress vessel breach alerts whenever the Shipping Locator (Live AIS Ships) option is OFF
+      if (cooldownKey && cooldownKey.startsWith('ship-') && !isShipsVisible) return;
+
+      const banner = document.getElementById('sanctuary-global-alarm');
+      const coordsBadge = document.getElementById('alarm-coords-badge');
+      const titleEl = document.getElementById('alarm-title-text');
+      const detailEl = document.getElementById('alarm-detail-text');
+
+      currentActiveAlarmKey = cooldownKey || '';
+
+      if (coordsBadge) coordsBadge.textContent = `${lat.toFixed(2)}°N, ${lng.toFixed(2)}°E`;
+      if (titleEl) titleEl.textContent = title;
+      if (detailEl) detailEl.textContent = detail;
+      if (banner) banner.classList.remove('hidden');
+
+      if (cooldownKey && cooldownKey !== lastAlarmCooldownKey) {
+        lastAlarmCooldownKey = cooldownKey;
+        playSanctuaryAlarmTone();
+      }
+    }
+
+    function dismissSanctuaryAlarm() {
+      if (currentActiveAlarmKey) {
+        acknowledgedAlarmKeys.add(currentActiveAlarmKey);
+      }
+      if (lastAlarmCooldownKey) {
+        acknowledgedAlarmKeys.add(lastAlarmCooldownKey);
+      }
+      currentActiveAlarmKey = '';
+
+      const banner = document.getElementById('sanctuary-global-alarm');
+      if (banner) banner.classList.add('hidden');
+    }
+
+    function toggleSanctuaryAlarmAudio() {
+      isSanctuaryAlarmAudioEnabled = !isSanctuaryAlarmAudioEnabled;
+      const icon = document.getElementById('alarm-audio-icon');
+      const label = document.getElementById('alarm-audio-label');
+      if (icon) {
+        icon.className = isSanctuaryAlarmAudioEnabled
+          ? 'fa-solid fa-volume-high mr-1'
+          : 'fa-solid fa-volume-xmark mr-1';
+      }
+      if (label) {
+        label.textContent = isSanctuaryAlarmAudioEnabled ? 'Tone ON' : 'Tone OFF';
+      }
+    }
+
+    function toggleSanctuaryLayer(checked) {
+      isSanctuaryVisible = checked;
+      if (checked) {
+        sanctuaryLayerGroup.addTo(map);
+      } else {
+        map.removeLayer(sanctuaryLayerGroup);
+        dismissSanctuaryAlarm();
+      }
+    }
+
+    function simulateSwatchBreach() {
+      if (!isSanctuaryVisible) {
+        const chk = document.getElementById('chk-sanctuary');
+        if (chk) chk.checked = true;
+        toggleSanctuaryLayer(true);
+      }
+      lastAlarmCooldownKey = '';
+      triggerSanctuaryAlarm(
+        'SWATCH OF NO GROUND MARINE PROTECTED AREA ALERT',
+        'Geofence breach simulation inside deep-canyon cetacean & Hilsa breeding reserve. Commercial trawling prohibited.',
+        21.08,
+        89.42,
+        `sim-${Date.now()}`
+      );
+    }
+
+    function renderSwatchOfNoGroundLayer() {
+      sanctuaryLayerGroup.clearLayers();
+
+      // High-contrast dark outer casing so the MPA boundary pops over red/yellow HSI zones
+      L.polygon(swatchMpaPolygon, {
+        pane: 'sanctuaryPane',
+        color: '#04070f',
+        weight: 8,
+        opacity: 0.92,
+        fill: false,
+        interactive: false
+      }).addTo(sanctuaryLayerGroup);
+
+      // Vivid gold/amber outer dashed perimeter ring
+      L.polygon(swatchMpaPolygon, {
+        pane: 'sanctuaryPane',
+        color: '#fde047',
+        weight: 3.5,
+        dashArray: '10, 6',
+        opacity: 0.98,
+        fill: false,
+        interactive: false
+      }).addTo(sanctuaryLayerGroup);
+
+      // Primary interactive Swatch of No Ground sanctuary fill & glowing border
+      const poly = L.polygon(swatchMpaPolygon, {
+        pane: 'sanctuaryPane',
+        color: '#ff2a78',
+        weight: 2.5,
+        fillColor: '#ff1e6e',
+        fillOpacity: 0.34,
+        className: 'swatch-mpa-zone'
+      }).addTo(sanctuaryLayerGroup);
+
+      poly.on('click', function (e) {
+        L.DomEvent.stopPropagation(e);
+        triggerSanctuaryAlarm(
+          'SWATCH OF NO GROUND MARINE PROTECTED AREA',
+          'Restricted marine sanctuary (21.08°N, 89.42°E). Commercial gillnetting & bottom trawling strictly prohibited.',
+          e.latlng.lat,
+          e.latlng.lng,
+          `click-${Date.now()}`
+        );
+      });
+
+      // Corner boundary beacon markers for unmistakable spatial visibility
+      swatchMpaPolygon.forEach(coord => {
+        L.circleMarker(coord, {
+          pane: 'sanctuaryPane',
+          radius: 4,
+          color: '#04070f',
+          weight: 1.5,
+          fillColor: '#fde047',
+          fillOpacity: 1,
+          interactive: false
+        }).addTo(sanctuaryLayerGroup);
+      });
+
+      const labelIcon = L.divIcon({
+        className: 'swatch-mpa-label',
+        html: `<div class="px-2.5 py-1 rounded-lg bg-rose-950/95 border-2 border-amber-300 text-[10px] font-mono font-extrabold text-amber-200 tracking-wide whitespace-nowrap shadow-[0_0_16px_rgba(255,30,110,0.85)]">🛡️ SWATCH OF NO GROUND MPA</div>`,
+        iconSize: [196, 26],
+        iconAnchor: [98, 13]
+      });
+      L.marker([21.08, 89.42], {
+        pane: 'sanctuaryPane',
+        icon: labelIcon,
+        interactive: false
+      }).addTo(sanctuaryLayerGroup);
+    }
+
+    // -------------------------------------------------------------
+    // MULTI-SPECIES SEAWARD MIGRATION & 2014-2034 SHIFT OVERLAY
+    // -------------------------------------------------------------
+    function toggleMigrationFlow(checked) {
+      isMigrationFlowVisible = checked;
+      renderSpeciesMigrationLayer();
+    }
+
+    function renderSpeciesMigrationLayer() {
+      migrationFlowLayerGroup.clearLayers();
+      const badge = document.getElementById('migration-mode-badge');
+      if (badge) {
+        badge.textContent = currentTimelineMode === '20y' ? '2014–2034' : 'SEAWARD';
+      }
+      if (!isMigrationFlowVisible) return;
+
+      if (currentTimelineMode === '20y') {
+        const shiftCoords = [];
+        const milestoneYears = [2014, 2018, 2022, 2026, 2030, 2034];
+        for (let yr = 2014; yr <= 2034; yr++) {
+          const d = decadalNasaCmip6Data[yr];
+          if (d) shiftCoords.push([d.lat, d.lng]);
+        }
+
+        L.polyline(shiftCoords, {
+          pane: 'migrationPane',
+          color: '#fbbf24',
+          weight: 3,
+          dashArray: '8, 6',
+          className: 'migration-flow-stream'
+        }).addTo(migrationFlowLayerGroup);
+
+        milestoneYears.forEach(yr => {
+          const d = decadalNasaCmip6Data[yr];
+          if (!d) return;
+          const isCurrent = Math.abs(currentStep - yr) <= 1;
+          const markerIcon = L.divIcon({
+            className: 'migration-year-badge',
+            html: `<div class="px-1.5 py-0.5 rounded font-mono text-[9px] font-extrabold ${isCurrent ? 'bg-amber-400 text-gray-950 border border-white scale-110' : 'bg-gray-950/90 text-amber-300 border border-amber-500/70'} shadow cursor-pointer">${yr}</div>`,
+            iconSize: [42, 18],
+            iconAnchor: [21, 9]
+          });
+          const m = L.marker([d.lat, d.lng], { pane: 'migrationPane', icon: markerIcon }).addTo(migrationFlowLayerGroup);
+          m.on('click', function (e) {
+            L.DomEvent.stopPropagation(e);
+            const slider = document.getElementById('time-slider');
+            if (slider) slider.value = yr;
+            onTimelineChange(yr);
+          });
+        });
+      } else {
+        const corridors = [
+          [[22.35, 90.68], [21.85, 90.52], [21.25, 90.35], [20.55, 90.15]],
+          [[21.95, 89.85], [21.45, 89.62], [20.95, 89.38], [20.30, 89.10]],
+          [[21.80, 91.55], [21.15, 91.42], [20.45, 91.20], [19.75, 90.95]]
+        ];
+        corridors.forEach(path => {
+          L.polyline(path, {
+            pane: 'migrationPane',
+            color: '#00e5ff',
+            weight: 2.5,
+            dashArray: '10, 8',
+            opacity: 0.85,
+            className: 'migration-flow-stream',
+            interactive: false
+          }).addTo(migrationFlowLayerGroup);
+        });
+      }
+    }
+
+    // -------------------------------------------------------------
+    // REAL-TIME AIS VESSEL TRACKING FLEET & RADAR LOCK ENGINE
+    // -------------------------------------------------------------
+    const vesselsData = [
+      {
+        id: 'ship-1',
+        name: 'FV Meghna Pioneer',
+        mmsi: '405112091',
+        type: 'Artisanal Hilsa Trawler',
+        lat: 21.52,
+        lng: 90.42,
+        heading: 195,
+        speedKnots: 9.4,
+        color: '#00e676',
+        wake: [[21.62, 90.46], [21.52, 90.42]]
+      },
+      {
+        id: 'ship-2',
+        name: 'RV Sagar Kanya',
+        mmsi: '419002418',
+        type: 'Oceanographic Research Vessel',
+        lat: 20.65,
+        lng: 89.95,
+        heading: 145,
+        speedKnots: 12.1,
+        color: '#00e5ff',
+        wake: [[20.78, 89.86], [20.65, 89.95]]
+      },
+      {
+        id: 'ship-3',
+        name: 'FV Bhola Star',
+        mmsi: '405228714',
+        type: 'Gillnet Fishing Boat',
+        lat: 21.38,
+        lng: 91.22,
+        heading: 220,
+        speedKnots: 8.2,
+        color: '#ffb300',
+        wake: [[21.48, 91.30], [21.38, 91.22]]
+      },
+      {
+        id: 'ship-4',
+        name: 'CG Ruposhi Bangla',
+        mmsi: '405900112',
+        type: 'MPA Patrol Cutter',
+        lat: 21.18,
+        lng: 89.10,
+        heading: 112,
+        speedKnots: 15.6,
+        color: '#38bdf8',
+        wake: [[21.24, 88.95], [21.18, 89.10]]
+      },
+      {
+        id: 'ship-5',
+        name: "FV Cox's Horizon",
+        mmsi: '405334890',
+        type: 'Pelagic Longliner',
+        lat: 19.65,
+        lng: 91.65,
+        heading: 255,
+        speedKnots: 10.8,
+        color: '#a78bfa',
+        wake: [[19.70, 91.80], [19.65, 91.65]]
+      }
+    ];
+
+    function buildShipIcon(ship, isLocked) {
+      const radarRing = isLocked
+        ? `<circle cx="21" cy="21" r="17" fill="none" stroke="#00e676" stroke-width="2.4" class="ship-lock-ring" />`
+        : '';
+      return L.divIcon({
+        className: 'ship-marker-wrapper',
+        html: `
+          <svg width="26" height="26" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg">
+            ${radarRing}
+            <g transform="rotate(${ship.heading} 21 21)">
+              <!-- Outer Hull Silhouette (Pointed Bow, Beam Midship, Transom Stern) -->
+              <path d="M21 5 C24.8 10.5 26.8 16.5 26.8 24.5 L25.4 35.5 C25.4 36.6 24.5 37.2 23.4 37.2 L18.6 37.2 C17.5 37.2 16.6 36.6 16.6 35.5 L15.2 24.5 C15.2 16.5 17.2 10.5 21 5 Z"
+                    fill="${ship.color}" stroke="#050811" stroke-width="2.4" stroke-linejoin="round" />
+              <!-- Inner Deck & Forward Cargo Hatch -->
+              <path d="M21 9.5 C23.2 13.5 24.2 17.8 24.2 23.5 L17.8 23.5 C17.8 17.8 18.8 13.5 21 9.5 Z"
+                    fill="rgba(5, 8, 17, 0.28)" />
+              <rect x="18.8" y="15.5" width="4.4" height="5.5" rx="1" fill="#f8fafc" fill-opacity="0.75" />
+              <!-- Aft Wheelhouse / Bridge Superstructure -->
+              <rect x="17.8" y="25" width="6.4" height="6.8" rx="1.4" fill="#0f172a" stroke="#ffffff" stroke-width="1.2" />
+              <rect x="18.8" y="26.2" width="4.4" height="2" rx="0.6" fill="#38bdf8" />
+            </g>
+          </svg>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+    }
+
+    function initShipsLayer() {
+      shipsLayerGroup.clearLayers();
+      vesselsData.forEach(ship => {
+        const wakeLine = L.polyline(ship.wake, {
+          pane: 'shipsPane',
+          color: ship.color,
+          weight: 1.2,
+          opacity: 0.45,
+          dashArray: '4, 4',
+          interactive: false
+        }).addTo(shipsLayerGroup);
+        shipWakesMap[ship.id] = wakeLine;
+
+        const marker = L.marker([ship.lat, ship.lng], {
+          pane: 'shipsPane',
+          icon: buildShipIcon(ship, lockedShipId === ship.id)
+        }).addTo(shipsLayerGroup);
+
+        marker.bindTooltip(`${ship.name} (${ship.speedKnots} kn)`, {
+          direction: 'top',
+          offset: [0, -7],
+          className: 'font-mono text-[10px]'
+        });
+
+        marker.on('click', function (e) {
+          L.DomEvent.stopPropagation(e);
+          lockOntoShip(ship.id);
+        });
+
+        shipMarkersMap[ship.id] = marker;
+      });
+
+      if (shipAnimTimer) clearInterval(shipAnimTimer);
+      shipAnimTimer = setInterval(stepVesselsSimulation, 1200);
+      renderShipsTrackerList();
+    }
+
+    function stepVesselsSimulation() {
+      if (!isShipsVisible) return;
+
+      vesselsData.forEach(ship => {
+        const rad = (ship.heading * Math.PI) / 180;
+        const stepDeg = (ship.speedKnots / 60) * (shipSpeedMultiplier / 3600) * 1.2;
+        const nextLat = ship.lat + Math.cos(rad) * stepDeg;
+        const nextLng = ship.lng + Math.sin(rad) * stepDeg;
+
+        if (isPointInOceanPolygon(nextLat, nextLng) && nextLat > 7.5 && nextLat < 22.3 && nextLng > 81.0 && nextLng < 96.5) {
+          ship.lat = nextLat;
+          ship.lng = nextLng;
+          ship.heading = (ship.heading + (Math.random() - 0.5) * 4 + 360) % 360;
+        } else {
+          ship.heading = (ship.heading + 135) % 360;
+        }
+
+        ship.wake.push([ship.lat, ship.lng]);
+        if (ship.wake.length > 14) ship.wake.shift();
+
+        const marker = shipMarkersMap[ship.id];
+        const wakeLine = shipWakesMap[ship.id];
+        if (marker) {
+          marker.setLatLng([ship.lat, ship.lng]);
+          marker.setIcon(buildShipIcon(ship, lockedShipId === ship.id));
+        }
+        if (wakeLine) {
+          wakeLine.setLatLngs(ship.wake);
+        }
+
+        if (lockedShipId === ship.id) {
+          updateTelemetryUI(
+            ship.lat,
+            ship.lng,
+            `🚢 LOCKED AIS: ${ship.name} (${ship.speedKnots} kn, HDG ${Math.round(ship.heading)}°)`
+          );
+        }
+
+        // Check live AIS vessel intrusion into Swatch of No Ground MPA
+        if (isShipsVisible && isSanctuaryVisible && isPointInSwatchMpa(ship.lat, ship.lng)) {
+          triggerSanctuaryAlarm(
+            `VESSEL BREACH ALERT: ${ship.name} (MMSI ${ship.mmsi})`,
+            `${ship.name} entered the Swatch of No Ground Marine Protected Area at ${ship.speedKnots} kn. Broadcast immediate warning.`,
+            ship.lat,
+            ship.lng,
+            `ship-${ship.id}`
+          );
+        }
+      });
+
+      if (isShipsPanelActive) {
+        renderShipsTrackerList();
+      }
+    }
+
+    function toggleShipsPanel() {
+      isShipsPanelActive = !isShipsPanelActive;
+      const panel = document.getElementById('ships-tracker-panel');
+      if (isShipsPanelActive) {
+        panel.classList.remove('hidden');
+        document.getElementById('houses-inspector-panel').classList.add('hidden');
+        document.getElementById('voyage-panel').classList.add('hidden');
+        isHousesInspectorActive = false;
+        isVoyagePlannerActive = false;
+        renderShipsTrackerList();
+      } else {
+        panel.classList.add('hidden');
+      }
+    }
+
+    function toggleShipsVisibility(checked) {
+      isShipsVisible = checked;
+      if (checked) {
+        shipsLayerGroup.addTo(map);
+      } else {
+        map.removeLayer(shipsLayerGroup);
+        unlockTrackedShip();
+        // Immediately hide any active vessel breach banner when Live AIS Ships is turned OFF
+        if (currentActiveAlarmKey && currentActiveAlarmKey.startsWith('ship-')) {
+          currentActiveAlarmKey = '';
+          const banner = document.getElementById('sanctuary-global-alarm');
+          if (banner) banner.classList.add('hidden');
+        }
+      }
+    }
+
+    function setShipSpeedMultiplier(val) {
+      shipSpeedMultiplier = Math.max(1, parseFloat(val) || 15);
+    }
+
+    function lockOntoShip(shipId) {
+      const ship = vesselsData.find(v => v.id === shipId);
+      if (!ship) return;
+      lockedShipId = ship.id;
+
+      const pill = document.getElementById('locked-ship-pill');
+      const pillName = document.getElementById('locked-ship-pill-name');
+      const releaseBtn = document.getElementById('btn-unlock-ship-drawer');
+      if (pill) {
+        pill.classList.remove('hidden');
+        pill.classList.add('flex');
+      }
+      if (pillName) pillName.textContent = ship.name;
+      if (releaseBtn) releaseBtn.classList.remove('hidden');
+
+      updateTelemetryUI(
+        ship.lat,
+        ship.lng,
+        `🚢 LOCKED AIS: ${ship.name} (${ship.speedKnots} kn, HDG ${Math.round(ship.heading)}°)`
+      );
+      renderShipsTrackerList();
+    }
+
+    function unlockTrackedShip() {
+      lockedShipId = null;
+      const pill = document.getElementById('locked-ship-pill');
+      const releaseBtn = document.getElementById('btn-unlock-ship-drawer');
+      if (pill) {
+        pill.classList.add('hidden');
+        pill.classList.remove('flex');
+      }
+      if (releaseBtn) releaseBtn.classList.add('hidden');
+      renderShipsTrackerList();
+    }
+
+    async function connectCustomAisFeed() {
+      const urlInput = document.getElementById('inp-ais-endpoint');
+      const badge = document.getElementById('ais-source-badge');
+      const url = urlInput ? urlInput.value.trim() : '';
+      if (!url) {
+        if (badge) badge.textContent = 'Bay of Bengal AIS Live Feed';
+        return;
+      }
+      try {
+        if (badge) badge.textContent = 'Connecting AIS Relay...';
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const records = Array.isArray(data) ? data : (data.vessels || []);
+        records.slice(0, vesselsData.length).forEach((rec, i) => {
+          if (typeof rec.lat === 'number' && typeof rec.lng === 'number') {
+            vesselsData[i].lat = rec.lat;
+            vesselsData[i].lng = rec.lng;
+            if (rec.name) vesselsData[i].name = rec.name;
+            if (rec.mmsi) vesselsData[i].mmsi = String(rec.mmsi);
+            if (typeof rec.speedKnots === 'number') vesselsData[i].speedKnots = rec.speedKnots;
+          }
+        });
+        if (badge) badge.textContent = 'Custom AIS Stream Synced';
+        renderShipsTrackerList();
+      } catch (err) {
+        if (badge) badge.textContent = 'Fallback: Built-in AIS Stream';
+      }
+    }
+
+    function renderShipsTrackerList() {
+      const listEl = document.getElementById('ships-tracker-list');
+      if (!listEl) return;
+
+      listEl.innerHTML = vesselsData.map(ship => {
+        const isLocked = lockedShipId === ship.id;
+        const sample = calculateHSIAt(ship.lat, ship.lng, currentStep, currentTimelineMode);
+        const hsiStr = sample ? sample.hsi.toFixed(2) : 'N/A';
+        return `
+          <div class="bg-gray-950/90 border ${isLocked ? 'border-emerald-400 shadow-lg' : 'border-gray-800'} rounded-xl p-2.5 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full" style="background:${ship.color};"></span>
+                <span class="font-bold text-white text-[11px]">${ship.name}</span>
+              </div>
+              <span class="text-[10px] font-extrabold text-cyan-400">HSI ${hsiStr}</span>
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-gray-400">
+              <span>${ship.type} • MMSI ${ship.mmsi}</span>
+              <span class="text-emerald-300 font-bold">${ship.speedKnots} kn</span>
+            </div>
+            <div class="flex items-center justify-between pt-1 border-t border-gray-800/80 text-[10px]">
+              <span class="text-gray-400">${ship.lat.toFixed(2)}°N, ${ship.lng.toFixed(2)}°E</span>
+              <div class="space-x-1.5">
+                <button onclick="map.flyTo([${ship.lat.toFixed(4)}, ${ship.lng.toFixed(4)}], 7)" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 cursor-pointer">Locate</button>
+                <button onclick="${isLocked ? 'unlockTrackedShip()' : `lockOntoShip('${ship.id}')`}" class="px-2 py-0.5 rounded ${isLocked ? 'bg-rose-600/30 text-rose-200 border-rose-500/70' : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/50'} border font-bold cursor-pointer">
+                  ${isLocked ? 'Unlock' : 'Lock & Track'}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // -------------------------------------------------------------
+    // COASTLINE & ISLAND BOUNDARY VECTOR POLYGONS
+    // -------------------------------------------------------------
+    const bayOfBengalPolygon = [
+      [22.82, 90.75], [22.75, 90.95], [22.45, 91.20], [22.35, 91.65],
+      [22.25, 91.80], [21.75, 91.95], [21.45, 91.98], [20.85, 92.25],
+      [20.15, 92.80], [19.75, 93.25], [19.25, 93.50], [18.65, 94.00],
+      [17.85, 94.45], [16.85, 94.65], [16.00, 94.35], [15.80, 95.25],
+      [16.25, 96.50], [16.00, 97.60], [14.00, 98.20], [12.00, 98.60],
+      [9.50, 98.50], [7.00, 98.50], [5.00, 99.00], [5.00, 78.00],
+      [5.90, 80.50], [8.00, 81.80], [10.00, 79.80], [11.80, 79.85],
+      [13.20, 80.35], [14.00, 80.15], [15.80, 80.85], [16.20, 81.65],
+      [17.60, 83.25], [18.30, 84.15], [19.20, 84.85], [19.80, 85.85],
+      [20.25, 86.65], [20.80, 86.95], [21.50, 87.25], [21.65, 87.85],
+      [21.60, 88.25], [21.50, 88.85], [21.60, 89.15], [21.75, 89.55],
+      [21.90, 89.85], [22.05, 90.35], [22.45, 90.50], [22.65, 90.55]
+    ];
+
+    const islandsPolygons = [
+      [[22.65, 90.65], [22.50, 90.75], [22.15, 90.78], [21.90, 90.65], [22.10, 90.50], [22.45, 90.45]],
+      [[22.40, 91.00], [22.20, 91.15], [22.00, 91.05], [22.15, 90.85], [22.35, 90.90]],
+      [[22.55, 91.45], [22.40, 91.50], [22.35, 91.38], [22.50, 91.32]],
+      [[21.85, 88.10], [21.60, 88.12], [21.58, 88.00], [21.80, 87.98]]
+    ];
+
+    function isPointInOceanPolygon(lat, lng) {
+      const x = lng;
+      const y = lat;
+      let inside = false;
+
+      for (let i = 0, j = bayOfBengalPolygon.length - 1; i < bayOfBengalPolygon.length; j = i++) {
+        const xi = bayOfBengalPolygon[i][1];
+        const yi = bayOfBengalPolygon[i][0];
+        const xj = bayOfBengalPolygon[j][1];
+        const yj = bayOfBengalPolygon[j][0];
+        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+
+      if (!inside) return false;
+
+      for (let k = 0; k < islandsPolygons.length; k++) {
+        const poly = islandsPolygons[k];
+        let inIsland = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+          const xi = poly[i][1];
+          const yi = poly[i][0];
+          const xj = poly[j][1];
+          const yj = poly[j][0];
+          const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+          if (intersect) inIsland = !inIsland;
+        }
+        if (inIsland) return false;
+      }
+
+      return true;
+    }
+
+    // -------------------------------------------------------------
+    // OCEANOGRAPHIC PHYSICS & MATHEMATICAL HSI ENGINE (10 SPECIES)
+    // -------------------------------------------------------------
+    const decadalNasaCmip6Data = {
+      2014: { lat: 21.80, lng: 90.50, sstAnom: 0.00, sssAnom: 0.0, chlAnom: 0.00 },
+      2015: { lat: 21.75, lng: 90.49, sstAnom: 0.08, sssAnom: 0.1, chlAnom: -0.02 },
+      2016: { lat: 21.71, lng: 90.48, sstAnom: 0.19, sssAnom: 0.3, chlAnom: -0.05 },
+      2017: { lat: 21.66, lng: 90.47, sstAnom: 0.24, sssAnom: 0.4, chlAnom: -0.07 },
+      2018: { lat: 21.60, lng: 90.46, sstAnom: 0.31, sssAnom: 0.6, chlAnom: -0.09 },
+      2019: { lat: 21.53, lng: 90.44, sstAnom: 0.42, sssAnom: 0.8, chlAnom: -0.12 },
+      2020: { lat: 21.46, lng: 90.43, sstAnom: 0.51, sssAnom: 1.0, chlAnom: -0.15 },
+      2021: { lat: 21.39, lng: 90.41, sstAnom: 0.58, sssAnom: 1.2, chlAnom: -0.18 },
+      2022: { lat: 21.32, lng: 90.40, sstAnom: 0.67, sssAnom: 1.4, chlAnom: -0.21 },
+      2023: { lat: 21.25, lng: 90.38, sstAnom: 0.76, sssAnom: 1.7, chlAnom: -0.25 },
+      2024: { lat: 21.18, lng: 90.37, sstAnom: 0.85, sssAnom: 1.9, chlAnom: -0.28 },
+      2025: { lat: 21.11, lng: 90.35, sstAnom: 0.94, sssAnom: 2.1, chlAnom: -0.31 },
+      2026: { lat: 21.04, lng: 90.34, sstAnom: 1.02, sssAnom: 2.3, chlAnom: -0.34 },
+      2027: { lat: 20.97, lng: 90.32, sstAnom: 1.11, sssAnom: 2.5, chlAnom: -0.38 },
+      2028: { lat: 20.90, lng: 90.31, sstAnom: 1.20, sssAnom: 2.7, chlAnom: -0.41 },
+      2029: { lat: 20.83, lng: 90.29, sstAnom: 1.28, sssAnom: 3.0, chlAnom: -0.44 },
+      2030: { lat: 20.76, lng: 90.28, sstAnom: 1.36, sssAnom: 3.2, chlAnom: -0.47 },
+      2031: { lat: 20.69, lng: 90.26, sstAnom: 1.44, sssAnom: 3.4, chlAnom: -0.50 },
+      2032: { lat: 20.62, lng: 90.25, sstAnom: 1.52, sssAnom: 3.6, chlAnom: -0.53 },
+      2033: { lat: 20.55, lng: 90.23, sstAnom: 1.60, sssAnom: 3.8, chlAnom: -0.56 },
+      2034: { lat: 20.48, lng: 90.22, sstAnom: 1.68, sssAnom: 4.0, chlAnom: -0.60 }
+    };
+
+    const speciesProfiles = {
+      hilsa:      { optSst: 28.0, sigSst: 2.4, optSss: 18.0, sigSss: 6.2, maxChl: 3.8 },
+      pelagic:    { optSst: 27.2, sigSst: 2.8, optSss: 28.5, sigSss: 6.5, maxChl: 2.4 },
+      birds:      { optSst: 28.2, sigSst: 2.6, optSss: 16.0, sigSss: 5.8, maxChl: 4.2 },
+      bagda:      { optSst: 29.0, sigSst: 2.2, optSss: 15.5, sigSss: 5.5, maxChl: 4.0 },
+      tuna:       { optSst: 26.5, sigSst: 2.5, optSss: 34.2, sigSss: 3.8, maxChl: 1.6 },
+      pomfret:    { optSst: 27.6, sigSst: 2.3, optSss: 27.5, sigSss: 5.2, maxChl: 2.6 },
+      bombayduck: { optSst: 28.5, sigSst: 2.5, optSss: 21.5, sigSss: 5.8, maxChl: 3.5 },
+      lobster:    { optSst: 27.1, sigSst: 2.1, optSss: 32.0, sigSss: 4.2, maxChl: 2.1 },
+      seabass:    { optSst: 28.8, sigSst: 2.4, optSss: 16.5, sigSss: 6.0, maxChl: 3.6 },
+      sawfish:    { optSst: 28.3, sigSst: 2.3, optSss: 17.5, sigSss: 5.6, maxChl: 3.9 }
+    };
+
+    function calculateHSIAt(lat, lng, step, mode) {
+      if (!isPointInOceanPolygon(lat, lng)) return null;
+
+      let shiftLat = 0.0;
+      let shiftLng = 0.0;
+      let sstOffset = 0.0;
+      let sssOffset = 0.0;
+      let chlOffset = 0.0;
+
+      if (mode === '20y') {
+        const yr = Math.max(2014, Math.min(2034, Math.round(step)));
+        const decData = decadalNasaCmip6Data[yr] || decadalNasaCmip6Data[2026];
+        shiftLat = decData.lat - 21.80;
+        shiftLng = decData.lng - 90.50;
+        sstOffset = decData.sstAnom;
+        sssOffset = decData.sssAnom;
+        chlOffset = decData.chlAnom;
+      } else {
+        const tidalPhase = (step / 12.42) * Math.PI * 2;
+        const diurnalPhase = ((step - 6) / 24.0) * Math.PI * 2;
+        shiftLat = 0.038 * Math.sin(tidalPhase);
+        shiftLng = -0.032 * Math.cos(tidalPhase);
+        sstOffset = 0.22 * Math.sin(diurnalPhase);
+        sssOffset = 0.45 * Math.sin(tidalPhase);
+        chlOffset = 0.08 * Math.cos(tidalPhase);
+      }
+
+      const phase1 = (mode === '48h') ? (step / 48) * 1.15 : ((step - 2014) / 20) * 1.65;
+      const phase2 = (mode === '48h') ? (step / 48) * 0.85 : ((step - 2014) / 20) * 1.25;
+
+      const e1 = Math.sin(lat * 3.8 + lng * 2.7 + phase1) * 0.14 + Math.cos(lat * 2.6 - lng * 4.3 - phase2) * 0.12;
+      const e2 = Math.cos(lat * 4.2 - lng * 2.4 + phase2) * 0.14 + Math.sin(lat * 2.3 + lng * 3.9 + phase1) * 0.12;
+
+      const f1 = Math.sin(lat * 8.9 - lng * 7.4 + phase2 * 1.4) * 0.045 + Math.cos(lat * 7.8 + lng * 9.5 - phase1) * 0.038;
+      const f2 = Math.cos(lat * 9.6 + lng * 6.8 - phase1 * 1.3) * 0.045 + Math.sin(lat * 7.3 - lng * 8.8 + phase2) * 0.038;
+
+      const wLat = lat + e1 + f1 - shiftLat;
+      const wLng = lng + e2 + f2 - shiftLng;
+
+      const anisoDist = (cLat, cLng, angle, rx, ry) => {
+        const ca = Math.cos(angle);
+        const sa = Math.sin(angle);
+        const dx = (wLng - cLng) * ca + (wLat - cLat) * sa;
+        const dy = -(wLng - cLng) * sa + (wLat - cLat) * ca;
+        return Math.hypot(dx / rx, dy / ry);
+      };
+
+      const kernels = [
+        { amp: 1.02, dist: anisoDist(21.55, 90.45, 0.55, 1.55, 0.62), decay: 0.92 },
+        { amp: 0.90, dist: anisoDist(21.02, 89.35, 0.78, 1.35, 0.48), decay: 0.96 },
+        { amp: 0.88, dist: anisoDist(21.25, 91.55, 1.25, 1.38, 0.42), decay: 0.98 },
+        { amp: 0.86, dist: anisoDist(20.45, 87.55, 0.72, 1.55, 0.52), decay: 0.95 },
+        { amp: 0.76, dist: anisoDist(16.10, 82.45, 0.85, 1.45, 0.46), decay: 1.02 },
+        { amp: 0.64, dist: anisoDist(12.20, 80.85, 1.35, 1.30, 0.40), decay: 1.08 },
+        { amp: 0.74, dist: anisoDist(19.05, 92.95, 1.15, 1.35, 0.42), decay: 1.05 },
+        { amp: 0.89, dist: anisoDist(15.35, 95.35, 0.35, 1.75, 0.68), decay: 0.94 },
+        { amp: 0.62, dist: anisoDist(17.55, 88.65, 0.45, 1.15, 0.65), decay: 1.10 },
+        { amp: 0.56, dist: anisoDist(13.85, 86.80, 0.60, 1.25, 0.62), decay: 1.14 },
+        { amp: 0.58, dist: anisoDist(12.60, 93.40, 1.05, 1.30, 0.55), decay: 1.12 }
+      ];
+
+      let plumeSum = 0.0;
+      let maxKernel = 0.0;
+      for (let i = 0; i < kernels.length; i++) {
+        const k = kernels[i];
+        const val = k.amp * Math.exp(-k.dist * k.decay);
+        if (val > maxKernel) maxKernel = val;
+        plumeSum += val * 0.42;
+      }
+
+      const plumeInfluence = Math.min(1.14, maxKernel * 0.72 + plumeSum * 0.55);
+      const eddyPerturb = (e1 - e2) * 1.15 + (f1 + f2) * 1.65;
+
+      const openOceanWeight = Math.max(0, 1.0 - plumeInfluence * 2.15);
+      const latNorm = Math.max(0, Math.min(1, (lat - 5.2) / 17.5));
+      const coastShelfProximity = Math.exp(-Math.max(0, lng - 81.2) * 0.22) + Math.exp(-Math.max(0, 96.5 - lng) * 0.24);
+      const rossbyWave =
+        Math.sin(lat * 0.85 - lng * 0.52 + phase1 * 0.7) * 0.5 +
+        Math.cos(lat * 1.45 + lng * 0.95 - phase2 * 0.6) * 0.5;
+      const basinDepthSignal = Math.max(0, Math.min(1,
+        latNorm * 0.58 +
+        Math.min(0.35, coastShelfProximity * 0.28) +
+        rossbyWave * 0.24
+      ));
+
+      let sst = 27.85 + (lat - 16.5) * 0.06 + Math.sin(wLng * 0.65) * 0.32 + eddyPerturb * 0.55 + sstOffset;
+      let chl = Math.max(
+        0.06,
+        0.09 + basinDepthSignal * 0.26 + 3.35 * Math.pow(plumeInfluence, 1.28) + eddyPerturb * 0.42 + chlOffset
+      );
+      let sss = Math.max(
+        8.5,
+        Math.min(
+          35.4,
+          34.9 - openOceanWeight * basinDepthSignal * 3.6 - 15.8 * Math.pow(plumeInfluence, 0.90) - eddyPerturb * 2.1 + sssOffset
+        )
+      );
+
+      if (isSubSurfaceView) {
+        sst -= 1.35;
+        sss = Math.min(35.4, sss + 1.65);
+        chl *= 0.88;
+      }
+
+      const prof = speciesProfiles[currentSpecies] || speciesProfiles.hilsa;
+      const sSst = Math.exp(-Math.pow(sst - prof.optSst, 2) / (2 * Math.pow(prof.sigSst, 2)));
+      const sChl = Math.min(1.0, Math.log10(chl + 1.0) / Math.log10(prof.maxChl));
+      const sSss = Math.exp(-Math.pow(sss - prof.optSss, 2) / (2 * Math.pow(prof.sigSss, 2)));
+
+      const hsiRaw = Math.pow(Math.max(0.0001, sSst * sChl * sSss), 1 / 3);
+      const hsi = Math.max(0.01, Math.min(0.99, hsiRaw));
+
+      return { hsi, sst, chl, sss, sSst, sChl, sSss };
+    }
+
+    // -------------------------------------------------------------
+    // 4-DOMAIN COLOR PALETTE & FLUID CANVAS RENDERER
+    // -------------------------------------------------------------
+    function getContinuousHsiColor(hsi) {
+      const v = Math.max(0, Math.min(1, hsi));
+      let r = 10;
+      let g = 40;
+      let b = 120;
+      const a = 236;
+
+      if (v < 0.05) {
+        const t = v / 0.05;
+        r = Math.round(4 + t * 4);
+        g = Math.round(18 + t * 16);
+        b = Math.round(56 + t * 40);
+      } else if (v < 0.12) {
+        const t = (v - 0.05) / 0.07;
+        r = Math.round(8 + t * 5);
+        g = Math.round(34 + t * 24);
+        b = Math.round(96 + t * 52);
+      } else if (v < 0.20) {
+        const t = (v - 0.12) / 0.08;
+        r = Math.round(13 + t * 8);
+        g = Math.round(58 + t * 36);
+        b = Math.round(148 + t * 48);
+      } else if (v < 0.28) {
+        const t = (v - 0.20) / 0.08;
+        r = Math.round(21 + t * 8);
+        g = Math.round(94 + t * 40);
+        b = Math.round(196 + t * 36);
+      } else if (v < 0.35) {
+        const t = (v - 0.28) / 0.07;
+        r = Math.round(29 + t * 17);
+        g = Math.round(134 + t * 38);
+        b = Math.round(232 + t * 14);
+      } else if (v < 0.40) {
+        const t = (v - 0.35) / 0.05;
+        r = Math.round(46 - t * 12);
+        g = Math.round(172 + t * 26);
+        b = Math.round(246 - t * 8);
+      } else if (v < 0.50) {
+        const t = (v - 0.40) / 0.10;
+        r = Math.round(13 + t * 9);
+        g = Math.round(148 + t * 49);
+        b = Math.round(136 - t * 42);
+      } else if (v < 0.60) {
+        const t = (v - 0.50) / 0.10;
+        r = Math.round(22 + t * 79);
+        g = Math.round(197 - t * 34);
+        b = Math.round(94 - t * 81);
+      } else if (v < 0.70) {
+        const t = (v - 0.60) / 0.10;
+        r = Math.round(250 - t * 16);
+        g = Math.round(204 - t * 25);
+        b = Math.round(21 - t * 13);
+      } else if (v < 0.80) {
+        const t = (v - 0.70) / 0.10;
+        r = Math.round(234 - t * 17);
+        g = Math.round(179 - t * 60);
+        b = Math.round(8 - t * 2);
+      } else if (v < 0.90) {
+        const t = (v - 0.80) / 0.10;
+        r = Math.round(244 - t * 54);
+        g = Math.round(63 - t * 45);
+        b = Math.round(94 - t * 34);
+      } else {
+        const t = (v - 0.90) / 0.10;
+        r = Math.round(190 - t * 63);
+        g = Math.round(18 - t * 18);
+        b = Math.round(60 - t * 35);
+      }
+
+      return { r, g, b, a };
+    }
+
+    const HsiCanvasLayer = L.Layer.extend({
+      onAdd: function (mapInstance) {
+        this._map = mapInstance;
+        this._canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated pointer-events-none');
+        this._canvas.style.position = 'absolute';
+        this._canvas.style.top = '0';
+        this._canvas.style.left = '0';
+        this._canvas.style.zIndex = '350';
+        mapInstance.getPanes().overlayPane.appendChild(this._canvas);
+        mapInstance.on('moveend zoomend resize', this._reset, this);
+        this._reset();
+      },
+      onRemove: function (mapInstance) {
+        L.DomUtil.remove(this._canvas);
+        mapInstance.off('moveend zoomend resize', this._reset, this);
+      },
+      _reset: function () {
+        const size = this._map.getSize();
+        const topLeft = this._map.containerPointToLayerPoint([0, 0]);
+        L.DomUtil.setPosition(this._canvas, topLeft);
+        this._canvas.width = size.x;
+        this._canvas.height = size.y;
+        this.render();
+      },
+      render: function () {
+        if (!this._map || !this._canvas) return;
+        const ctx = this._canvas.getContext('2d');
+        const size = this._map.getSize();
+        ctx.clearRect(0, 0, size.x, size.y);
+
+        if (!isHsiVisible) return;
+
+        const cols = 96;
+        const rows = 96;
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = cols;
+        offCanvas.height = rows;
+        const offCtx = offCanvas.getContext('2d');
+        const imgData = offCtx.createImageData(cols, rows);
+        const data = imgData.data;
+
+        for (let r = 0; r < rows; r++) {
+          const y = ((r + 0.5) / rows) * size.y;
+          for (let c = 0; c < cols; c++) {
+            const x = ((c + 0.5) / cols) * size.x;
+            const latlng = this._map.containerPointToLatLng([x, y]);
+            const res = calculateHSIAt(latlng.lat, latlng.lng, currentStep, currentTimelineMode);
+            const idx = (r * cols + c) * 4;
+            if (!res) {
+              data[idx + 3] = 0;
+            } else {
+              const col = getContinuousHsiColor(res.hsi);
+              data[idx] = col.r;
+              data[idx + 1] = col.g;
+              data[idx + 2] = col.b;
+              data[idx + 3] = col.a;
+            }
+          }
+        }
+
+        offCtx.putImageData(imgData, 0, 0);
+
+        ctx.save();
+        ctx.filter = 'blur(6px)';
+        ctx.drawImage(offCanvas, 0, 0, cols, rows, 0, 0, size.x, size.y);
+        ctx.restore();
+      }
+    });
+
+    const hsiLayer = new HsiCanvasLayer();
+    hsiLayer.addTo(map);
+
+    // -------------------------------------------------------------
+    // 12-TIER DATA-DRIVEN EDGY SUB-ZONES (RED / YELLOW / GREEN)
+    // -------------------------------------------------------------
+    const domainSubTiers = [
+      { domain: 'red', min: 0.95, max: 1.01, label: 'Red Core • Tier 1 (0.95–0.99)', fill: '#7f0019', stroke: '#ffccd5', fillOpacity: 0.72 },
+      { domain: 'red', min: 0.90, max: 0.95, label: 'Red Core • Tier 2 (0.90–0.95)', fill: '#be123c', stroke: '#fda4af', fillOpacity: 0.64 },
+      { domain: 'red', min: 0.85, max: 0.90, label: 'Red Core • Tier 3 (0.85–0.90)', fill: '#e11d48', stroke: '#fecdd3', fillOpacity: 0.58 },
+      { domain: 'red', min: 0.80, max: 0.85, label: 'Red Core • Tier 4 (0.80–0.85)', fill: '#f43f5e', stroke: '#ffe4e6', fillOpacity: 0.52 },
+      { domain: 'yellow', min: 0.75, max: 0.80, label: 'Yellow Shelf • Tier 1 (0.75–0.80)', fill: '#d97706', stroke: '#fde68a', fillOpacity: 0.56 },
+      { domain: 'yellow', min: 0.70, max: 0.75, label: 'Yellow Shelf • Tier 2 (0.70–0.75)', fill: '#eab308', stroke: '#fef08a', fillOpacity: 0.50 },
+      { domain: 'yellow', min: 0.65, max: 0.70, label: 'Yellow Shelf • Tier 3 (0.65–0.70)', fill: '#facc15', stroke: '#fef9c3', fillOpacity: 0.45 },
+      { domain: 'yellow', min: 0.60, max: 0.65, label: 'Yellow Shelf • Tier 4 (0.60–0.65)', fill: '#fde047', stroke: '#fefce8', fillOpacity: 0.40 },
+      { domain: 'green', min: 0.55, max: 0.60, label: 'Green Corridor • Tier 1 (0.55–0.60)', fill: '#65a30d', stroke: '#d9f99d', fillOpacity: 0.46 },
+      { domain: 'green', min: 0.50, max: 0.55, label: 'Green Corridor • Tier 2 (0.50–0.55)', fill: '#16a34a', stroke: '#bbf7d0', fillOpacity: 0.42 },
+      { domain: 'green', min: 0.45, max: 0.50, label: 'Green Corridor • Tier 3 (0.45–0.50)', fill: '#059669', stroke: '#a7f3d0', fillOpacity: 0.38 },
+      { domain: 'green', min: 0.40, max: 0.45, label: 'Green Corridor • Tier 4 (0.40–0.45)', fill: '#0d9488', stroke: '#99f6e4', fillOpacity: 0.34 }
+    ];
+
+    function traceIsoContourPolygons(grid, rows, cols, minLat, maxLat, minLng, maxLng, threshold) {
+      const dLat = (maxLat - minLat) / (rows - 1);
+      const dLng = (maxLng - minLng) / (cols - 1);
+      const segments = [];
+
+      for (let r = 0; r < rows - 1; r++) {
+        const lat0 = minLat + r * dLat;
+        const lat1 = lat0 + dLat;
+        for (let c = 0; c < cols - 1; c++) {
+          const lng0 = minLng + c * dLng;
+          const lng1 = lng0 + dLng;
+
+          const v00 = grid[r][c];
+          const v10 = grid[r][c + 1];
+          const v11 = grid[r + 1][c + 1];
+          const v01 = grid[r + 1][c];
+
+          const b0 = v00 >= threshold ? 1 : 0;
+          const b1 = v10 >= threshold ? 2 : 0;
+          const b2 = v11 >= threshold ? 4 : 0;
+          const b3 = v01 >= threshold ? 8 : 0;
+          const code = b0 | b1 | b2 | b3;
+
+          if (code === 0 || code === 15) continue;
+
+          const interp = (va, vb, la, lga, lb, lgb) => {
+            const denom = (vb - va);
+            const t = Math.abs(denom) < 1e-7 ? 0.5 : Math.max(0, Math.min(1, (threshold - va) / denom));
+            return [la + t * (lb - la), lga + t * (lgb - lga)];
+          };
+
+          const eBottom = interp(v00, v10, lat0, lng0, lat0, lng1);
+          const eRight  = interp(v10, v11, lat0, lng1, lat1, lng1);
+          const eTop    = interp(v01, v11, lat1, lng0, lat1, lng1);
+          const eLeft   = interp(v00, v01, lat0, lng0, lat1, lng0);
+
+          switch (code) {
+            case 1: case 14: segments.push([eLeft, eBottom]); break;
+            case 2: case 13: segments.push([eBottom, eRight]); break;
+            case 3: case 12: segments.push([eLeft, eRight]); break;
+            case 4: case 11: segments.push([eRight, eTop]); break;
+            case 5:
+              segments.push([eLeft, eTop]);
+              segments.push([eBottom, eRight]);
+              break;
+            case 6: case 9: segments.push([eBottom, eTop]); break;
+            case 7: case 8: segments.push([eLeft, eTop]); break;
+            case 10:
+              segments.push([eLeft, eBottom]);
+              segments.push([eRight, eTop]);
+              break;
+          }
+        }
+      }
+
+      const loops = [];
+      const used = new Uint8Array(segments.length);
+      const eps = 1e-4;
+
+      for (let i = 0; i < segments.length; i++) {
+        if (used[i]) continue;
+        used[i] = 1;
+        const loop = [segments[i][0], segments[i][1]];
+        let extended = true;
+
+        while (extended) {
+          extended = false;
+          const tail = loop[loop.length - 1];
+          for (let j = 0; j < segments.length; j++) {
+            if (used[j]) continue;
+            const s0 = segments[j][0];
+            const s1 = segments[j][1];
+            if (Math.hypot(tail[0] - s0[0], tail[1] - s0[1]) < eps) {
+              used[j] = 1;
+              loop.push(s1);
+              extended = true;
+              break;
+            } else if (Math.hypot(tail[0] - s1[0], tail[1] - s1[1]) < eps) {
+              used[j] = 1;
+              loop.push(s0);
+              extended = true;
+              break;
+            }
+          }
+        }
+
+        if (loop.length >= 6) {
+          loops.push(loop);
+        }
+      }
+
+      return loops;
+    }
+
+    function extractAndRenderDataDrivenHsiZones() {
+      hotspotHousesLayerGroup.clearLayers();
+      extractedDataDrivenPockets = [];
+
+      if (!isHotspotHousesVisible) {
+        renderHousesInspectorList();
+        return;
+      }
+
+      const minLat = 5.4;
+      const maxLat = 22.9;
+      const minLng = 79.2;
+      const maxLng = 98.6;
+      const rows = 92;
+      const cols = 104;
+
+      const grid = Array.from({ length: rows }, () => new Float32Array(cols));
+      for (let r = 0; r < rows; r++) {
+        const lat = minLat + (r / (rows - 1)) * (maxLat - minLat);
+        for (let c = 0; c < cols; c++) {
+          const lng = minLng + (c / (cols - 1)) * (maxLng - minLng);
+          const res = calculateHSIAt(lat, lng, currentStep, currentTimelineMode);
+          grid[r][c] = res ? res.hsi : 0.0;
+        }
+      }
+
+      const reversedTiers = [...domainSubTiers].reverse();
+      let pocketIdx = 0;
+
+      reversedTiers.forEach(tier => {
+        if (tier.min < hsiBarCutoff) return;
+
+        const loops = traceIsoContourPolygons(grid, rows, cols, minLat, maxLat, minLng, maxLng, tier.min);
+
+        loops.forEach(loop => {
+          let sumLat = 0;
+          let sumLng = 0;
+          for (let k = 0; k < loop.length; k++) {
+            sumLat += loop[k][0];
+            sumLng += loop[k][1];
+          }
+          const cLat = sumLat / loop.length;
+          const cLng = sumLng / loop.length;
+
+          const sample = calculateHSIAt(cLat, cLng, currentStep, currentTimelineMode) || {
+            hsi: (tier.min + Math.min(0.99, tier.max)) * 0.5,
+            sst: 28.0,
+            chl: 1.8,
+            sss: 20.5
+          };
+
+          let areaDeg2 = 0;
+          for (let i = 0; i < loop.length; i++) {
+            const j = (i + 1) % loop.length;
+            areaDeg2 += loop[i][1] * loop[j][0] - loop[j][1] * loop[i][0];
+          }
+          const areaKm2 = Math.max(18, Math.round(Math.abs(areaDeg2) * 0.5 * 111.32 * 103.5));
+
+          pocketIdx++;
+          const pocketData = {
+            id: `Z-${String(pocketIdx).padStart(2, '0')}`,
+            domain: tier.domain,
+            tierLabel: tier.label,
+            cLat,
+            cLng,
+            hsi: sample.hsi,
+            sst: sample.sst,
+            chl: sample.chl,
+            sss: sample.sss,
+            areaKm2
+          };
+          extractedDataDrivenPockets.push(pocketData);
+
+          const poly = L.polygon(loop, {
+            pane: 'housesPane',
+            color: tier.stroke,
+            weight: 1.0,
+            opacity: 0.75,
+            fillColor: tier.fill,
+            fillOpacity: tier.fillOpacity,
+            smoothFactor: 0.4
+          });
+
+          poly.on('mouseover', function () {
+            this.setStyle({ fillOpacity: Math.min(0.92, tier.fillOpacity + 0.18), weight: 1.8 });
+            if (!lockedShipId) {
+              updateTelemetryUI(cLat, cLng, `${tier.label} • ${cLat.toFixed(2)}°N, ${cLng.toFixed(2)}°E`);
+            }
+          });
+
+          poly.on('mouseout', function () {
+            this.setStyle({ fillOpacity: tier.fillOpacity, weight: 1.0 });
+          });
+
+          poly.on('click', function (e) {
+            L.DomEvent.stopPropagation(e);
+            const popupHtml = `
+              <div class="space-y-2 text-xs">
+                <div class="flex items-center justify-between border-b border-gray-800 pb-1.5">
+                  <span class="font-bold text-white">${tier.label}</span>
+                  <span class="font-mono font-extrabold text-cyan-400">${sample.hsi.toFixed(2)} HSI</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5 font-mono text-[10px] text-gray-300">
+                  <div>Center: <span class="text-white">${cLat.toFixed(2)}°N, ${cLng.toFixed(2)}°E</span></div>
+                  <div>Area: <span class="text-amber-300">${areaKm2.toLocaleString()} km²</span></div>
+                  <div>SST: <span class="text-amber-400">${sample.sst.toFixed(1)} °C</span></div>
+                  <div>CHL: <span class="text-emerald-400">${sample.chl.toFixed(2)} mg/m³</span></div>
+                  <div>Salinity: <span class="text-cyan-400">${sample.sss.toFixed(1)} PSU</span></div>
+                </div>
+                <button onclick="routeToCoordinates(${cLat.toFixed(4)}, ${cLng.toFixed(4)}, '${tier.label.replace(/'/g, '')}')" class="w-full mt-1 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold py-1.5 rounded-lg text-[11px] transition-all cursor-pointer">
+                  ⛵ Set as Voyage Target
+                </button>
+              </div>
+            `;
+            L.popup({ className: 'doriya-house-popup' })
+              .setLatLng(e.latlng)
+              .setContent(popupHtml)
+              .openOn(map);
+          });
+
+          poly.addTo(hotspotHousesLayerGroup);
+        });
+      });
+
+      extractedDataDrivenPockets.sort((a, b) => b.hsi - a.hsi);
+      renderHousesInspectorList();
+    }
+
+    function renderIsolinesOverlay() {
+      isolinesLayerGroup.clearLayers();
+      if (!isIsolinesVisible) return;
+
+      const minLat = 8.0;
+      const maxLat = 22.8;
+      const minLng = 80.5;
+      const maxLng = 97.5;
+      const rows = 68;
+      const cols = 76;
+
+      const grid = Array.from({ length: rows }, () => new Float32Array(cols));
+      for (let r = 0; r < rows; r++) {
+        const lat = minLat + (r / (rows - 1)) * (maxLat - minLat);
+        for (let c = 0; c < cols; c++) {
+          const lng = minLng + (c / (cols - 1)) * (maxLng - minLng);
+          const res = calculateHSIAt(lat, lng, currentStep, currentTimelineMode);
+          grid[r][c] = res ? res.hsi : 0.0;
+        }
+      }
+
+      const contourLevels = [
+        { val: 0.85, color: 'rgba(255, 255, 255, 0.72)', weight: 1.4, dash: null },
+        { val: 0.70, color: 'rgba(254, 240, 138, 0.55)', weight: 1.1, dash: '4,4' },
+        { val: 0.50, color: 'rgba(167, 243, 208, 0.45)', weight: 1.0, dash: '6,6' }
+      ];
+
+      contourLevels.forEach(lvl => {
+        const loops = traceIsoContourPolygons(grid, rows, cols, minLat, maxLat, minLng, maxLng, lvl.val);
+        loops.forEach(loop => {
+          L.polyline(loop, {
+            color: lvl.color,
+            weight: lvl.weight,
+            dashArray: lvl.dash,
+            interactive: false
+          }).addTo(isolinesLayerGroup);
+        });
+      });
+    }
+
+    function updateTelemetryUI(lat, lng, customLabel) {
+      const res = calculateHSIAt(lat, lng, currentStep, currentTimelineMode);
+
+      const valHsiEl = document.getElementById('val-hsi');
+      const barHsiEl = document.getElementById('bar-hsi');
+      const valSstEl = document.getElementById('val-sst');
+      const barSstEl = document.getElementById('bar-sst');
+      const valChlEl = document.getElementById('val-chl');
+      const barChlEl = document.getElementById('bar-chl');
+      const valSssEl = document.getElementById('val-sss');
+      const barSssEl = document.getElementById('bar-sss');
+      const mathSstEl = document.getElementById('math-sst');
+      const mathChlEl = document.getElementById('math-chl');
+      const mathSssEl = document.getElementById('math-sss');
+      const hsiBadgeEl = document.getElementById('hsi-badge');
+      const featureTitleEl = document.getElementById('feature-title');
+
+      const alwaysHsiEl = document.getElementById('always-val-hsi');
+      const alwaysStatusEl = document.getElementById('always-hsi-status');
+      const alwaysSstEl = document.getElementById('always-val-sst');
+      const alwaysChlEl = document.getElementById('always-val-chl');
+      const alwaysSssEl = document.getElementById('always-val-sss');
+
+      if (!res) {
+        if (featureTitleEl) featureTitleEl.textContent = `Coastal Landmass / Delta Island (${lat.toFixed(2)}°N, ${lng.toFixed(2)}°E)`;
+        if (alwaysHsiEl) alwaysHsiEl.textContent = 'LAND';
+        if (alwaysStatusEl) {
+          alwaysStatusEl.textContent = 'LAND / DELTA MASK';
+          alwaysStatusEl.className = 'bg-gray-800 text-gray-300 border border-gray-600 text-[10px] font-bold px-2 py-0.5 rounded-full';
+        }
+        return;
+      }
+
+      const hsiFormatted = res.hsi.toFixed(2);
+      const hsiPct = Math.round(res.hsi * 100);
+
+      let statusLabel = 'ABYSSAL BLUE (0.00–0.10)';
+      let badgeCls = 'bg-slate-950/90 text-sky-300 border border-sky-800/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+      let pillCls = 'bg-slate-950 text-sky-300 border border-sky-800/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+
+      if (res.hsi >= 0.80) {
+        statusLabel = 'RED CORE (0.80–0.99)';
+        badgeCls = 'bg-rose-950/90 text-rose-300 border border-rose-600/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+        pillCls = 'bg-rose-950 text-rose-300 border border-rose-600/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+      } else if (res.hsi >= 0.60) {
+        statusLabel = 'YELLOW SHELF (0.60–0.80)';
+        badgeCls = 'bg-amber-950/90 text-amber-300 border border-amber-600/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+        pillCls = 'bg-amber-950 text-amber-300 border border-amber-600/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+      } else if (res.hsi >= 0.40) {
+        statusLabel = 'GREEN CORRIDOR (0.40–0.60)';
+        badgeCls = 'bg-emerald-950/90 text-emerald-300 border border-emerald-600/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+        pillCls = 'bg-emerald-950 text-emerald-300 border border-emerald-600/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+      } else if (res.hsi >= 0.30) {
+        statusLabel = 'AZURE BLUE (0.30–0.40)';
+        badgeCls = 'bg-sky-950/90 text-sky-300 border border-sky-600/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+        pillCls = 'bg-sky-950 text-sky-300 border border-sky-600/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+      } else if (res.hsi >= 0.20) {
+        statusLabel = 'SAPPHIRE BLUE (0.20–0.30)';
+        badgeCls = 'bg-blue-950/90 text-blue-300 border border-blue-600/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+        pillCls = 'bg-blue-950 text-blue-300 border border-blue-600/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+      } else if (res.hsi >= 0.10) {
+        statusLabel = 'COBALT BLUE (0.10–0.20)';
+        badgeCls = 'bg-indigo-950/90 text-indigo-300 border border-indigo-700/80 font-mono font-extrabold px-2.5 py-0.5 rounded-full text-[10px]';
+        pillCls = 'bg-indigo-950 text-indigo-300 border border-indigo-700/80 text-[10px] font-bold px-2 py-0.5 rounded-full';
+      }
+
+      if (valHsiEl) valHsiEl.textContent = `${hsiFormatted} / 1.00`;
+      if (barHsiEl) barHsiEl.style.width = `${hsiPct}%`;
+      if (valSstEl) valSstEl.textContent = `${res.sst.toFixed(1)} °C`;
+      if (barSstEl) barSstEl.style.width = `${Math.min(100, Math.max(5, ((res.sst - 22) / 10) * 100))}%`;
+      if (valChlEl) valChlEl.textContent = `${res.chl.toFixed(2)} mg/m³`;
+      if (barChlEl) barChlEl.style.width = `${Math.min(100, Math.max(5, (res.chl / 4.2) * 100))}%`;
+      if (valSssEl) valSssEl.textContent = `${res.sss.toFixed(1)} PSU`;
+      if (barSssEl) barSssEl.style.width = `${Math.min(100, Math.max(5, (res.sss / 35.5) * 100))}%`;
+
+      if (mathSstEl) mathSstEl.textContent = res.sSst.toFixed(2);
+      if (mathChlEl) mathChlEl.textContent = res.sChl.toFixed(2);
+      if (mathSssEl) mathSssEl.textContent = res.sSss.toFixed(2);
+
+      if (hsiBadgeEl) {
+        hsiBadgeEl.textContent = statusLabel;
+        hsiBadgeEl.className = badgeCls;
+      }
+
+      if (featureTitleEl) {
+        featureTitleEl.textContent = customLabel || `Bay of Bengal Sector (${lat.toFixed(2)}°N, ${lng.toFixed(2)}°E) • ${statusLabel}`;
+      }
+
+      if (alwaysHsiEl) alwaysHsiEl.textContent = hsiFormatted;
+      if (alwaysStatusEl) {
+        alwaysStatusEl.textContent = statusLabel;
+        alwaysStatusEl.className = pillCls;
+      }
+      if (alwaysSstEl) alwaysSstEl.textContent = `${res.sst.toFixed(1)}°C`;
+      if (alwaysChlEl) alwaysChlEl.textContent = `${res.chl.toFixed(2)}mg/m³`;
+      if (alwaysSssEl) alwaysSssEl.textContent = `${res.sss.toFixed(1)}PSU`;
+    }
+
+    map.on('mousemove', function (e) {
+      currentMousePos = e.latlng;
+      if (!lockedShipId) {
+        updateTelemetryUI(e.latlng.lat, e.latlng.lng);
+      }
+    });
+
+    function toggleHousesInspector() {
+      isHousesInspectorActive = !isHousesInspectorActive;
+      const panel = document.getElementById('houses-inspector-panel');
+      if (isHousesInspectorActive) {
+        panel.classList.remove('hidden');
+        document.getElementById('voyage-panel').classList.add('hidden');
+        document.getElementById('ships-tracker-panel').classList.add('hidden');
+        isVoyagePlannerActive = false;
+        isShipsPanelActive = false;
+        renderHousesInspectorList();
+      } else {
+        panel.classList.add('hidden');
+      }
+    }
+
+    function setHousesFilter(domain) {
+      currentHousesFilter = domain;
+      ['all', 'red', 'yellow', 'green'].forEach(d => {
+        const btn = document.getElementById(`filter-houses-${d}`);
+        if (!btn) return;
+        if (d === domain) {
+          btn.className = 'px-2 py-1 rounded bg-rose-500/25 text-rose-200 border border-rose-500/60 font-bold cursor-pointer';
+        } else {
+          btn.className = 'px-2 py-1 rounded bg-gray-900 text-gray-300 border border-gray-800 hover:text-white cursor-pointer';
+        }
+      });
+      renderHousesInspectorList();
+    }
+
+    function setHsiBarCutoff(val) {
+      hsiBarCutoff = parseFloat(val);
+      const legendEl = document.getElementById('legend-bar-cutoff');
+      if (legendEl) legendEl.textContent = `BAR ≥ ${hsiBarCutoff.toFixed(2)}`;
+      extractAndRenderDataDrivenHsiZones();
+    }
+
+    function renderHousesInspectorList() {
+      const listEl = document.getElementById('houses-inspector-list');
+      const countEl = document.getElementById('houses-ultra-count');
+      if (!listEl) return;
+
+      const filtered = extractedDataDrivenPockets.filter(p =>
+        currentHousesFilter === 'all' ? true : p.domain === currentHousesFilter
+      );
+
+      if (countEl) countEl.textContent = `${filtered.length} POCKETS`;
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="text-center text-gray-400 py-6">No pockets match the current domain filter.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.slice(0, 36).map(p => {
+        const borderCol = p.domain === 'red' ? 'border-rose-500/50' : p.domain === 'yellow' ? 'border-amber-500/50' : 'border-emerald-500/50';
+        const textCol = p.domain === 'red' ? 'text-rose-300' : p.domain === 'yellow' ? 'text-amber-300' : 'text-emerald-300';
+        return `
+          <div class="bg-gray-950/90 border ${borderCol} rounded-xl p-2.5 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="font-bold ${textCol} text-[10px]">${p.id} • ${p.tierLabel}</span>
+              <span class="font-extrabold text-cyan-400 text-[11px]">${p.hsi.toFixed(2)} HSI</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[10px] text-gray-300">
+              <div>Area: <span class="text-white font-bold">${p.areaKm2.toLocaleString()} km²</span></div>
+              <div>SST: <span class="text-amber-400">${p.sst.toFixed(1)}°C</span></div>
+              <div>SSS: <span class="text-cyan-400">${p.sss.toFixed(1)} PSU</span></div>
+            </div>
+            <div class="flex items-center justify-between pt-1 border-t border-gray-800/80 text-[10px]">
+              <span class="text-gray-400">${p.cLat.toFixed(2)}°N, ${p.cLng.toFixed(2)}°E</span>
+              <div class="space-x-1.5">
+                <button onclick="map.flyTo([${p.cLat.toFixed(4)}, ${p.cLng.toFixed(4)}], 8)" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 cursor-pointer">Focus</button>
+                <button onclick="routeToCoordinates(${p.cLat.toFixed(4)}, ${p.cLng.toFixed(4)}, '${p.id} (${p.tierLabel})')" class="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 font-bold cursor-pointer">Route</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // -------------------------------------------------------------
+    // SHORE-TO-SEA VOYAGE & FUEL PLANNER (ON TOP voyagePane z=640)
+    // -------------------------------------------------------------
+    const shoreDocks = {
+      bhola:       { name: 'Bhola Dock (Central Delta)',  lat: 22.36, lng: 90.72 },
+      chandpur:    { name: 'Chandpur (North Estuary)',    lat: 23.22, lng: 90.64 },
+      patharghata: { name: 'Patharghata (Barguna)',       lat: 22.04, lng: 89.97 },
+      mongla:      { name: 'Mongla (Sundarbans West)',    lat: 21.78, lng: 89.60 },
+      chattogram:  { name: 'Chattogram Fishery Ghat',     lat: 22.32, lng: 91.80 },
+      coxsbazar:   { name: "Cox's Bazar Dock",            lat: 21.45, lng: 91.96 }
+    };
+
+    const vesselBurnRates = {
+      small:  { litersPerKm: 0.55 },
+      medium: { litersPerKm: 1.15 },
+      large:  { litersPerKm: 2.25 }
+    };
+
+    function initShoreDockMarkers() {
+      Object.entries(shoreDocks).forEach(([key, dock]) => {
+        const marker = L.circleMarker([dock.lat, dock.lng], {
+          pane: 'voyagePane',
+          radius: 7.5,
+          color: '#ffffff',
+          weight: 2,
+          fillColor: '#f59e0b',
+          fillOpacity: 1
+        }).addTo(map);
+
+        marker.bindTooltip(dock.name, { direction: 'top', className: 'font-mono text-[10px]' });
+        marker.on('click', function (e) {
+          L.DomEvent.stopPropagation(e);
+          document.getElementById('shore-port-select').value = key;
+          if (!isVoyagePlannerActive) toggleVoyagePlanner();
+          updateFuelCalc();
+        });
+        shorePortMarkers.push(marker);
+      });
+    }
+
+    function toggleVoyagePlanner() {
+      isVoyagePlannerActive = !isVoyagePlannerActive;
+      const panel = document.getElementById('voyage-panel');
+      if (isVoyagePlannerActive) {
+        panel.classList.remove('hidden');
+        document.getElementById('houses-inspector-panel').classList.add('hidden');
+        document.getElementById('ships-tracker-panel').classList.add('hidden');
+        isHousesInspectorActive = false;
+        isShipsPanelActive = false;
+      } else {
+        panel.classList.add('hidden');
+      }
+    }
+
+    function routeToCoordinates(lat, lng, label) {
+      clickedCustomTarget = { lat: parseFloat(lat), lng: parseFloat(lng), label: label || `${parseFloat(lat).toFixed(2)}°N, ${parseFloat(lng).toFixed(2)}°E` };
+      if (!isVoyagePlannerActive) {
+        toggleVoyagePlanner();
+      }
+      updateFuelCalc();
+    }
+
+    function clearVoyageRoute() {
+      clickedCustomTarget = null;
+      if (routeCasingPolyline) {
+        map.removeLayer(routeCasingPolyline);
+        routeCasingPolyline = null;
+      }
+      if (routePolyline) {
+        map.removeLayer(routePolyline);
+        routePolyline = null;
+      }
+      if (oceanMarker) {
+        map.removeLayer(oceanMarker);
+        oceanMarker = null;
+      }
+      document.getElementById('target-loc-text').textContent = 'Tap any ocean point on map';
+      document.getElementById('calc-dist').textContent = '0 km';
+      document.getElementById('calc-diesel').textContent = '0.0 L';
+      document.getElementById('calc-cost').textContent = '৳ 0';
+      document.getElementById('calc-co2').textContent = '0 kg';
+      document.getElementById('sanctuary-alert-banner').classList.add('hidden');
+    }
+
+    function haversineKm(lat1, lng1, lat2, lng2) {
+      const R = 6371.0;
+      const toRad = d => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function updateFuelCalc() {
+      if (!clickedCustomTarget) return;
+
+      const portKey = document.getElementById('shore-port-select').value;
+      const dock = shoreDocks[portKey] || shoreDocks.bhola;
+      const vesselKey = document.getElementById('vessel-select').value;
+      const vessel = vesselBurnRates[vesselKey] || vesselBurnRates.medium;
+
+      const distKm = haversineKm(dock.lat, dock.lng, clickedCustomTarget.lat, clickedCustomTarget.lng);
+      const savedLiters = distKm * vessel.litersPerKm * 0.28;
+      const savedCostBdt = Math.round(savedLiters * 109);
+      const co2CutKg = Math.round(savedLiters * 2.68);
+
+      document.getElementById('target-loc-text').textContent = clickedCustomTarget.label;
+      document.getElementById('calc-dist').textContent = `${distKm.toFixed(1)} km`;
+      document.getElementById('calc-diesel').textContent = `${savedLiters.toFixed(1)} L`;
+      document.getElementById('calc-cost').textContent = `৳ ${savedCostBdt.toLocaleString()}`;
+      document.getElementById('calc-co2').textContent = `${co2CutKg} kg`;
+
+      // Sanctuary check (Swatch of No Ground MPA polygon + route intersection + Meghna Sanctuary)
+      const targetInSwatch = isPointInSwatchMpa(clickedCustomTarget.lat, clickedCustomTarget.lng);
+      const routeCrossesSwatch = doesSegmentIntersectSwatchMpa(dock.lat, dock.lng, clickedCustomTarget.lat, clickedCustomTarget.lng);
+      const meghnaSanctuary = (clickedCustomTarget.lat >= 22.05 && clickedCustomTarget.lat <= 22.55 && clickedCustomTarget.lng >= 90.55 && clickedCustomTarget.lng <= 91.05);
+      const banner = document.getElementById('sanctuary-alert-banner');
+      const msg = document.getElementById('sanctuary-alert-msg');
+
+      if (targetInSwatch || routeCrossesSwatch) {
+        const breachPt = targetInSwatch ? clickedCustomTarget : routeCrossesSwatch;
+        const alertDetail = targetInSwatch
+          ? 'Target lies inside Swatch of No Ground Marine Protected Area (MPA). Commercial gillnetting restricted.'
+          : 'Planned route crosses through Swatch of No Ground Marine Protected Area (MPA). Adjust waypoint around restricted boundary.';
+        banner.classList.remove('hidden');
+        msg.textContent = alertDetail;
+        triggerSanctuaryAlarm(
+          targetInSwatch ? 'SWATCH OF NO GROUND MPA TARGET BREACH' : 'ROUTE CROSSES SWATCH OF NO GROUND MPA',
+          alertDetail,
+          breachPt.lat,
+          breachPt.lng,
+          `route-${breachPt.lat.toFixed(2)}-${breachPt.lng.toFixed(2)}`
+        );
+      } else if (meghnaSanctuary) {
+        banner.classList.remove('hidden');
+        msg.textContent = 'Target lies inside Lower Meghna–Shahbazpur Hilsa Nursery Sanctuary. Seasonal ban rules apply.';
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      if (routeCasingPolyline) map.removeLayer(routeCasingPolyline);
+      if (routePolyline) map.removeLayer(routePolyline);
+      if (oceanMarker) map.removeLayer(oceanMarker);
+
+      routeCasingPolyline = L.polyline([[dock.lat, dock.lng], [clickedCustomTarget.lat, clickedCustomTarget.lng]], {
+        pane: 'voyagePane',
+        color: '#050811',
+        weight: 6.5,
+        opacity: 0.9,
+        interactive: false
+      }).addTo(map);
+
+      routePolyline = L.polyline([[dock.lat, dock.lng], [clickedCustomTarget.lat, clickedCustomTarget.lng]], {
+        pane: 'voyagePane',
+        color: '#38bdf8',
+        weight: 3.2,
+        dashArray: '8, 6',
+        interactive: false
+      }).addTo(map);
+
+      oceanMarker = L.circleMarker([clickedCustomTarget.lat, clickedCustomTarget.lng], {
+        pane: 'voyagePane',
+        radius: 8.5,
+        color: '#ffffff',
+        weight: 2.5,
+        fillColor: '#00e5ff',
+        fillOpacity: 1
+      }).addTo(map);
+    }
+
+    map.on('click', function (e) {
+      if (!isPointInOceanPolygon(e.latlng.lat, e.latlng.lng)) return;
+      routeToCoordinates(e.latlng.lat, e.latlng.lng, `${e.latlng.lat.toFixed(2)}°N, ${e.latlng.lng.toFixed(2)}°E`);
+    });
+
+    // -------------------------------------------------------------
+    // TIMELINE, LAYER, SPECIES, BASEMAP & HUD CONTROLS
+    // -------------------------------------------------------------
+    function refreshAllMapLayers() {
+      hsiLayer.render();
+      renderIsolinesOverlay();
+      extractAndRenderDataDrivenHsiZones();
+      renderSpeciesMigrationLayer();
+      if (lockedShipId) {
+        const s = vesselsData.find(v => v.id === lockedShipId);
+        if (s) {
+          updateTelemetryUI(s.lat, s.lng, `🚢 LOCKED AIS: ${s.name} (${s.speedKnots} kn, HDG ${Math.round(s.heading)}°)`);
+        }
+      } else {
+        const center = currentMousePos || { lat: 21.55, lng: 90.45 };
+        updateTelemetryUI(center.lat, center.lng);
+      }
+    }
+
+    function setTimelineMode(mode) {
+      currentTimelineMode = mode;
+      const slider = document.getElementById('time-slider');
+      const btn48h = document.getElementById('btn-mode-48h');
+      const btn20y = document.getElementById('btn-mode-20y');
+
+      if (mode === '48h') {
+        slider.min = 0;
+        slider.max = 48;
+        slider.value = 0;
+        currentStep = 0;
+        document.getElementById('time-readout').textContent = '0h (NOW)';
+        btn48h.className = 'bg-cyan-500 text-gray-950 font-bold px-2 py-0.5 rounded border border-cyan-400 cursor-pointer';
+        btn20y.className = 'bg-gray-800 text-gray-400 font-bold px-2 py-0.5 rounded border border-gray-700 cursor-pointer';
+      } else {
+        slider.min = 2014;
+        slider.max = 2034;
+        slider.value = 2026;
+        currentStep = 2026;
+        document.getElementById('time-readout').textContent = '2026';
+        btn20y.className = 'bg-amber-400 text-gray-950 font-bold px-2 py-0.5 rounded border border-amber-300 cursor-pointer';
+        btn48h.className = 'bg-gray-800 text-gray-400 font-bold px-2 py-0.5 rounded border border-gray-700 cursor-pointer';
+      }
+      refreshAllMapLayers();
+    }
+
+    function onTimelineChange(val) {
+      currentStep = parseInt(val, 10);
+      document.getElementById('time-readout').textContent =
+        currentTimelineMode === '48h'
+          ? (currentStep === 0 ? '0h (NOW)' : `+${currentStep}h`)
+          : `${currentStep}`;
+      refreshAllMapLayers();
+    }
+
+    function toggleTimelinePlay() {
+      isPlaying = !isPlaying;
+      const icon = document.getElementById('play-icon');
+      const slider = document.getElementById('time-slider');
+
+      if (isPlaying) {
+        icon.className = 'fa-solid fa-pause text-xs';
+        playTimer = setInterval(() => {
+          if (currentTimelineMode === '48h') {
+            currentStep = (currentStep + 2) % 50;
+          } else {
+            currentStep = currentStep >= 2034 ? 2014 : currentStep + 1;
+          }
+          slider.value = currentStep;
+          onTimelineChange(currentStep);
+        }, 650);
+      } else {
+        icon.className = 'fa-solid fa-play text-xs';
+        clearInterval(playTimer);
+      }
+    }
+
+    function toggleHsi(checked) {
+      isHsiVisible = checked;
+      hsiLayer.render();
+    }
+
+    function toggleIsolines(checked) {
+      isIsolinesVisible = checked;
+      renderIsolinesOverlay();
+    }
+
+    function toggleSubSurfaceView(checked) {
+      isSubSurfaceView = checked;
+      refreshAllMapLayers();
+    }
+
+    function toggleHotspotHouses(checked) {
+      isHotspotHousesVisible = checked;
+      extractAndRenderDataDrivenHsiZones();
+    }
+
+    function changeSpeciesTarget(species) {
+      currentSpecies = species;
+      const prof = speciesProfiles[species] || speciesProfiles.hilsa;
+      const optSstEl = document.getElementById('math-opt-sst');
+      const optChlEl = document.getElementById('math-opt-chl');
+      const optSssEl = document.getElementById('math-opt-sss');
+      if (optSstEl) optSstEl.textContent = `T=${prof.optSst.toFixed(1)}°C`;
+      if (optChlEl) optChlEl.textContent = `Max=${prof.maxChl.toFixed(1)}mg/m³`;
+      if (optSssEl) optSssEl.textContent = `S=${prof.optSss.toFixed(1)}PSU`;
+
+      const alertBox = document.getElementById('species-conservation-alert');
+      if (alertBox) {
+        if (species === 'sawfish') {
+          alertBox.classList.remove('hidden');
+        } else {
+          alertBox.classList.add('hidden');
+        }
+      }
+
+      refreshAllMapLayers();
+    }
+
+    function changeBasemap(key) {
+      Object.values(basemaps).forEach(layer => map.removeLayer(layer));
+      if (basemaps[key]) basemaps[key].addTo(map);
+    }
+
+    function toggleHudVisibility() {
+      isHudVisible = !isHudVisible;
+      const hud = document.getElementById('hud-container');
+      const icon = document.getElementById('hud-switch-icon');
+      const label = document.getElementById('hud-switch-label');
+
+      if (isHudVisible) {
+        hud.classList.remove('hidden');
+        icon.className = 'fa-solid fa-eye-slash text-sm text-cyan-400';
+        label.textContent = 'HIDE PANELS';
+      } else {
+        hud.classList.add('hidden');
+        icon.className = 'fa-solid fa-eye text-sm text-cyan-400';
+        label.textContent = 'SHOW PANELS';
+      }
+    }
+
+    // -------------------------------------------------------------
+    // MODALS: NASA API KEYS, RAW TELEMETRY & MANN-KENDALL STAT DETECTIVE
+    // -------------------------------------------------------------
+    function openKeyModal() {
+      const m = document.getElementById('api-modal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeKeyModal() {
+      const m = document.getElementById('api-modal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function saveKeys() {
+      document.getElementById('status-text').textContent = 'AUTHENTICATED NASA EARTHDATA & NOAA ERDDAP STREAM ACTIVE';
+      closeKeyModal();
+    }
+
+    function openRawModal() {
+      const pos = currentMousePos || { lat: 21.55, lng: 90.45 };
+      const sample = calculateHSIAt(pos.lat, pos.lng, currentStep, currentTimelineMode);
+      const payload = {
+        engine: 'DoriyaNet Marine Engine v4.6',
+        basin: 'Bay of Bengal (5.0N-23.5N, 78.0E-99.0E)',
+        timelineMode: currentTimelineMode,
+        step: currentStep,
+        species: currentSpecies,
+        subSurface20m: isSubSurfaceView,
+        activeBarCutoff: hsiBarCutoff,
+        lockedShipId: lockedShipId,
+        activeVessels: vesselsData.map(v => ({ name: v.name, mmsi: v.mmsi, lat: Number(v.lat.toFixed(3)), lng: Number(v.lng.toFixed(3)), knots: v.speedKnots })),
+        cursorTelemetry: sample,
+        topExtractedPockets: extractedDataDrivenPockets.slice(0, 6)
+      };
+      document.getElementById('raw-json').textContent = JSON.stringify(payload, null, 2);
+      const m = document.getElementById('raw-modal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeRawModal() {
+      const m = document.getElementById('raw-modal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function openStatsModal() {
+      const m = document.getElementById('stats-modal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+      runMannKendallTest();
+    }
+
+    function closeStatsModal() {
+      const m = document.getElementById('stats-modal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function runMannKendallTest() {
+      const variable = document.getElementById('stats-var-select').value;
+      const zone = document.getElementById('stats-zone-select').value;
+
+      const zoneCoords = {
+        estuary: { lat: 21.65, lng: 90.48 },
+        swatch:  { lat: 21.05, lng: 89.38 },
+        odisha:  { lat: 20.45, lng: 87.55 }
+      };
+      const pt = zoneCoords[zone] || zoneCoords.estuary;
+
+      const series = [];
+      for (let yr = 2014; yr <= 2034; yr++) {
+        const res = calculateHSIAt(pt.lat, pt.lng, yr, '20y');
+        series.push(res ? res[variable] : 0);
+      }
+
+      let S = 0;
+      const slopes = [];
+      const n = series.length;
+      for (let i = 0; i < n - 1; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const diff = series[j] - series[i];
+          if (diff > 0) S++;
+          else if (diff < 0) S--;
+          slopes.push(diff / (j - i));
+        }
+      }
+
+      slopes.sort((a, b) => a - b);
+      const senSlope = slopes[Math.floor(slopes.length / 2)] || 0;
+      const varS = (n * (n - 1) * (2 * n + 5)) / 18;
+      const Z = S > 0 ? (S - 1) / Math.sqrt(varS) : S < 0 ? (S + 1) / Math.sqrt(varS) : 0;
+      const absZ = Math.abs(Z);
+      const pText = absZ > 3.29 ? '< 0.001' : absZ > 2.58 ? '< 0.01' : absZ > 1.96 ? '< 0.05' : '> 0.05 (NS)';
+
+      document.getElementById('stat-mk-s').textContent = `${S >= 0 ? '+' : ''}${S.toFixed(1)}`;
+      document.getElementById('stat-mk-z').textContent = `${Z >= 0 ? '+' : ''}${Z.toFixed(2)}`;
+      document.getElementById('stat-mk-p').textContent = pText;
+      document.getElementById('stat-mk-slope').textContent = `${senSlope >= 0 ? '+' : ''}${senSlope.toFixed(4)}/yr`;
+      document.getElementById('stat-ci-bounds').textContent = `95% CI: [${(senSlope * 0.85).toFixed(4)}, ${(senSlope * 1.15).toFixed(4)}]`;
+
+      const significant = absZ > 1.96;
+      document.getElementById('stat-verdict-badge').textContent = significant ? 'REJECT H0 (SIGNIFICANT)' : 'FAIL TO REJECT H0';
+      document.getElementById('stat-verdict-desc').textContent = significant
+        ? `Statistically significant monotonic trend detected over 2014–2034 (Z = ${Z.toFixed(2)}, p ${pText}).`
+        : `No statistically significant monotonic shift detected over 2014–2034 (Z = ${Z.toFixed(2)}).`;
+
+      const minVal = Math.min(...series);
+      const maxVal = Math.max(...series);
+      const span = Math.max(1e-6, maxVal - minVal);
+      const sparkEl = document.getElementById('stat-sparkline');
+      sparkEl.innerHTML = series.map((v, idx) => {
+        const hPct = Math.max(12, Math.round(((v - minVal) / span) * 100));
+        const col = idx >= 12 ? 'bg-amber-400' : 'bg-indigo-400';
+        return `<div class="flex-1 ${col} rounded-t" style="height: ${hPct}%" title="${2014 + idx}: ${v.toFixed(3)}"></div>`;
+      }).join('');
+    }
+
+    // -------------------------------------------------------------
+    // INITIALIZE APPLICATION ON WINDOW LOAD
+    // -------------------------------------------------------------
+    window.addEventListener('load', function () {
+      initShoreDockMarkers();
+      renderSwatchOfNoGroundLayer();
+      initShipsLayer();
+      initDraggableBoxes();
+      refreshAllMapLayers();
+    });
+  </script>
+</body>
+</html>
